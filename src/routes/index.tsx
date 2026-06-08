@@ -341,6 +341,7 @@ function Index() {
 
         <form
           onSubmit={handleSubmit}
+          autoComplete="off"
           className="mt-10 rounded-3xl border border-border/60 bg-card p-6 sm:p-10"
           style={{ boxShadow: "var(--shadow-elegant)" }}
         >
