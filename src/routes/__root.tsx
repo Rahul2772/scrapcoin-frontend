@@ -6,7 +6,11 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useNavigate,
 } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
 
 import appCss from "../styles.css?url";
 
@@ -64,6 +68,58 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function NavAuth() {
+  const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+      toast.success("Signed out");
+      await navigate({ to: "/" });
+    } catch {
+      toast.error("Failed to sign out");
+    }
+  }
+
+  if (user) {
+    return (
+      <div className="flex items-center gap-3">
+        <Link
+          to="/my-bookings"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          My Bookings
+        </Link>
+        {profile?.role === "admin" && (
+          <Link
+            to="/admin"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Admin
+          </Link>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full"
+          onClick={handleSignOut}
+        >
+          Sign out
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Link to="/login">
+      <Button size="sm" className="rounded-full">
+        Sign in
+      </Button>
+    </Link>
   );
 }
 
@@ -128,7 +184,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <AuthProvider>
+        <div className="fixed top-4 right-4 z-50">
+          <NavAuth />
+        </div>
+        <Outlet />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
