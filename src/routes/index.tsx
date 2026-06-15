@@ -109,8 +109,12 @@ function Index() {
       form.reset();
       setDate(undefined);
       setMaterials([]);
-    } catch {
-      toast.error("Could not schedule pickup. Please try again or WhatsApp us.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Could not schedule pickup. Please try again or WhatsApp us."
+      );
     } finally {
       setSubmitting(false);
     }
