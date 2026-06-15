@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandLogo } from "@/components/brand-logo";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -17,6 +18,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +31,34 @@ function LoginPage() {
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!email) {
+      toast.error("Enter your email address first.");
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        email,
+        type: "signup",
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+      if (error) throw error;
+      toast.success("Verification email resent. Check your inbox and spam.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to resend verification email"
+      );
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -80,6 +110,16 @@ function LoginPage() {
             disabled={loading}
           >
             {loading ? "Signing in..." : "Sign in"}
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full rounded-full"
+            onClick={handleResendVerification}
+            disabled={resendLoading}
+          >
+            {resendLoading ? "Resending…" : "Resend verification email"}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">

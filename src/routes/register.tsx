@@ -28,8 +28,10 @@ function RegisterPage() {
     setLoading(true);
     try {
       await signUp(email, password);
-      toast.success("Account created! Check your email to confirm.");
-      await navigate({ to: "/my-bookings" });
+      toast.success(
+        "Account created! Check your email inbox (and spam) to verify your address."
+      );
+      await navigate({ to: "/login" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Registration failed");
     } finally {
@@ -99,6 +101,11 @@ function RegisterPage() {
           >
             {loading ? "Creating account..." : "Create account"}
           </Button>
+
+          <p className="text-center text-sm text-muted-foreground">
+            After registering, you will receive an email with a confirmation link.
+            Please verify your address before signing in.
+          </p>
 
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}
