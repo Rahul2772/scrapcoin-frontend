@@ -32,11 +32,14 @@ async function parseJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function createBooking(payload: BookingPayload) {
+export async function createBooking(payload: BookingPayload, token?: string) {
   return parseJson<{ message: string }>(
     await fetch(`${API_BASE}/api/bookings`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
     }),
   );

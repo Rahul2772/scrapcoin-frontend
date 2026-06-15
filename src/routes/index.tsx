@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
+import { useAuth } from "@/context/AuthContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -63,6 +64,7 @@ const FALLBACK_LIVE_PICKUP: LivePickup = {
 };
 
 function Index() {
+  const { session } = useAuth();
   const [date, setDate] = useState<Date>();
   const [materials, setMaterials] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -92,14 +94,17 @@ function Index() {
 
     setSubmitting(true);
     try {
-      const result = await createBooking({
-        fullName: String(data.get("fullName")),
-        phone: String(data.get("phone")),
-        society: String(data.get("society")),
-        tower: String(data.get("tower") || "") || undefined,
-        pickupDate: format(date, "yyyy-MM-dd"),
-        materials,
-      });
+      const result = await createBooking(
+        {
+          fullName: String(data.get("fullName")),
+          phone: String(data.get("phone")),
+          society: String(data.get("society")),
+          tower: String(data.get("tower") || "") || undefined,
+          pickupDate: format(date, "yyyy-MM-dd"),
+          materials,
+        },
+        session?.access_token ?? undefined,
+      );
       toast.success(result.message);
       form.reset();
       setDate(undefined);
