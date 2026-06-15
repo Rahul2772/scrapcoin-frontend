@@ -68,7 +68,7 @@ function MyBookingsPage() {
 
     async function fetchBookings() {
       try {
-        const res = await fetch(`${API_BASE}/api/bookings`, {
+        const res = await fetch(`${API_BASE}/api/bookings/me`, {
           headers: {
             Authorization: `Bearer ${session!.access_token}`,
           },
