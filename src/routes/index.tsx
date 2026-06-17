@@ -547,7 +547,7 @@ function Index() {
             <div className="mt-4 flex gap-3">
               {[
                 { Icon: Instagram, href: "https://www.instagram.com/scrapco.in", label: "Instagram" },
-                { Icon: Facebook, href: "#", label: "Facebook" },
+                { Icon: Facebook, href: "https://www.facebook.com/share/19DUELcYa", label: "Facebook" },
                 { Icon: Twitter, href: "#", label: "Twitter" },
               ].map(({ Icon, href, label }, i) => (
                 <a
