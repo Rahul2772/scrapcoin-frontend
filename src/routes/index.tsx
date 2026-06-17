@@ -548,7 +548,7 @@ function Index() {
               {[
                 { Icon: Instagram, href: "https://www.instagram.com/scrapco.in", label: "Instagram" },
                 { Icon: Facebook, href: "https://www.facebook.com/share/19DUEDLcYa", label: "Facebook" },
-                { Icon: Twitter, href: "https://x.com/thescrapoin", label: "Twitter" },
+                { Icon: Twitter, href: "https://x.com/thescrapcoin", label: "Twitter" },
               ].map(({ Icon, href, label }, i) => (
                 <a
                   key={i}
