@@ -34,6 +34,8 @@ type Booking = {
   createdAt: string;
   updatedAt: string;
   actualWeights?: Record<string, number>;
+  championId?: string;
+  championEmail?: string;
 };
 
 const STATUS_CONFIG = {
@@ -57,6 +59,8 @@ function AdminBookings() {
   const [updating, setUpdating] = useState(false);
   const [weightsForm, setWeightsForm] = useState<Record<string, string>>({});
   const [showWeightForm, setShowWeightForm] = useState(false);
+  type Champion = { id: string; email: string; role: string };
+  const [champions, setChampions] = useState<Champion[]>([]);
 
 // FIXED — waits for both auth AND profile to load
 useEffect(() => {
@@ -81,6 +85,23 @@ useEffect(() => {
     fetchBookings();
   }, [session]);
 
+  useEffect(() => {
+    if (!session?.access_token || profile?.role !== "admin") return;
+    async function fetchChampions() {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/champions`, {
+          headers: { Authorization: `Bearer ${session!.access_token}` },
+        });
+        if (res.ok) {
+          setChampions(await res.json());
+        }
+      } catch (err) {
+        console.error("Failed to fetch champions:", err);
+      }
+    }
+    fetchChampions();
+  }, [session, profile]);
+
   async function updateStatus(id: string, status: string) {
     setUpdating(true);
     try {
@@ -99,6 +120,32 @@ useEffect(() => {
       toast.success("Status updated");
     } catch {
       toast.error("Failed to update status");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  async function updateChampion(bookingId: string, championId: string | null) {
+    setUpdating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session!.access_token}`,
+        },
+        body: JSON.stringify({ championId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Failed to assign champion");
+      }
+      const updated: Booking = await res.json();
+      setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
+      setSelected(updated);
+      toast.success("Champion assigned");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to assign champion");
     } finally {
       setUpdating(false);
     }
@@ -158,7 +205,7 @@ useEffect(() => {
               <table className="w-full text-sm">
                 <thead className="border-b border-border bg-muted/40">
                   <tr className="text-left text-muted-foreground">
-                    {["Name", "Phone", "Society", "Pickup Date", "Materials", "Status"].map(
+                    {["Name", "Phone", "Society", "Pickup Date", "Materials", "Champion", "Status"].map(
                       (h) => (
                         <th key={h} className="px-4 py-3 font-medium whitespace-nowrap">
                           {h}
@@ -191,6 +238,11 @@ useEffect(() => {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate">
                           {b.materials.join(", ")}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap max-w-[150px] truncate">
+                          {b.championEmail ?? (
+                            <span className="text-muted-foreground/50 italic">Unassigned</span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
@@ -300,6 +352,42 @@ useEffect(() => {
                       </SelectContent>
                     </Select>
                   </div>
+                )}
+
+                {!showWeightForm && (
+                  <>
+                    {profile?.role === "admin" ? (
+                      <div className="pt-4 border-t border-border">
+                        <p className="text-muted-foreground mb-2">Assign Champion</p>
+                        <Select
+                          value={selected.championId ?? "unassigned"}
+                          onValueChange={(val) => {
+                            updateChampion(selected.id, val === "unassigned" ? null : val);
+                          }}
+                          disabled={updating}
+                        >
+                          <SelectTrigger className="rounded-xl">
+                            <SelectValue placeholder="Select Champion" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {champions.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="pt-4 border-t border-border">
+                        <p className="text-muted-foreground">Assigned Champion</p>
+                        <p className="font-medium text-foreground">
+                          {selected.championEmail ?? "Unassigned"}
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {showWeightForm && (
