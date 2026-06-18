@@ -127,12 +127,12 @@ export function NavAuth() {
           >
             My Bookings
           </Link>
-          {profile?.role === "admin" && (
+          {(profile?.role === "admin" || profile?.role === "champion") && (
             <Link
               to="/admin"
               className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
-              Admin ⚙️
+              {profile.role === "champion" ? "Champion Panel ⚙️" : "Admin ⚙️"}
             </Link>
           )}
           <Button
