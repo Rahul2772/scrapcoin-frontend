@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { BrandLogo } from "@/components/brand-logo";
 import { WhatsAppFAB, WhatsAppLink } from "@/components/whatsapp-button";
-import { createBooking, fetchLivePickupDemo, type LivePickup } from "@/lib/api";
+import { createBooking, fetchCircularImpact, type CircularImpact } from "@/lib/api";
 import { NavAuth } from "./__root";
 
 export const Route = createFileRoute("/")({
@@ -50,18 +50,15 @@ export const Route = createFileRoute("/")({
 
 const MATERIALS = ["Paper / Cardboard", "Plastics", "Metals", "E-Waste", "Others"] as const;
 
-const FALLBACK_LIVE_PICKUP: LivePickup = {
-  id: "fallback",
-  location: "Tower B-204 • Sector 16C",
-  status: "in_progress",
-  items: [
-    { label: "Cardboard", weightKg: 4.2, categoryId: "cardboard" },
-    { label: "Plastics", weightKg: 1.8, categoryId: "plastics" },
-    { label: "Metals", weightKg: 2.6, categoryId: "metals" },
-    { label: "E-Waste", weightKg: 0.5, categoryId: "e-waste" },
-  ],
-  payoutAmount: 218,
-  currency: "INR",
+const FALLBACK_IMPACT: CircularImpact = {
+  grandTotalKg: 2135.5,
+  breakdown: [
+    { categoryId: "paper", label: "Paper & Cardboard", weightKg: 1140.0 },
+    { categoryId: "plastics", label: "Plastics", weightKg: 380.0 },
+    { categoryId: "metals", label: "Metals", weightKg: 486.0 },
+    { categoryId: "e-waste", label: "E-Waste", weightKg: 92.0 },
+    { categoryId: "others", label: "Others", weightKg: 45.0 }
+  ]
 };
 
 function Index() {
@@ -69,12 +66,12 @@ function Index() {
   const [date, setDate] = useState<Date>();
   const [materials, setMaterials] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [livePickup, setLivePickup] = useState<LivePickup>(FALLBACK_LIVE_PICKUP);
+  const [impact, setImpact] = useState<CircularImpact>(FALLBACK_IMPACT);
 
   useEffect(() => {
-    fetchLivePickupDemo()
-      .then(setLivePickup)
-      .catch(() => setLivePickup(FALLBACK_LIVE_PICKUP));
+    fetchCircularImpact()
+      .then(setImpact)
+      .catch(() => setImpact(FALLBACK_IMPACT));
   }, []);
 
   const toggleMaterial = (m: string) =>
@@ -213,29 +210,27 @@ function Index() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Live pickup</p>
-                  <p className="mt-1 font-semibold">{livePickup.location}</p>
-                </div>
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                  In progress
-                </span>
-              </div>
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                {livePickup.items.map((r) => (
-                  <div key={r.categoryId} className="rounded-xl border border-border/60 bg-background p-3">
-                    <p className="text-xs text-muted-foreground">{r.label}</p>
-                    <p className="mt-1 text-lg font-semibold">{r.weightKg} kg</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 flex items-center justify-between rounded-xl bg-accent p-4">
-                <div>
-                  <p className="text-xs text-accent-foreground/70">UPI payout</p>
-                  <p className="text-2xl font-bold text-accent-foreground">
-                    ₹ {livePickup.payoutAmount.toFixed(2)}
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Scrap Saved from Landfill</p>
+                  <p className="mt-1 text-2xl font-black text-foreground">
+                    {impact.grandTotalKg.toLocaleString()} kg
                   </p>
                 </div>
-                <Smartphone className="h-8 w-8 text-accent-foreground" />
+                <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 flex items-center gap-1.5 border border-emerald-500/20">
+                  <Leaf className="h-3 w-3" /> Saved from Landfills
+                </span>
+              </div>
+
+              <p className="mt-4 text-xs text-muted-foreground">
+                Total weight of recyclable scrap materials collected, traced, and diverted to certified recycling channels.
+              </p>
+
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                {impact.breakdown.map((r) => (
+                  <div key={r.categoryId} className="rounded-xl border border-border/60 bg-background p-3.5 transition-all hover:border-primary/30">
+                    <p className="text-xs text-muted-foreground font-medium">{r.label}</p>
+                    <p className="mt-1 text-lg font-bold text-foreground">{r.weightKg.toLocaleString()} kg</p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

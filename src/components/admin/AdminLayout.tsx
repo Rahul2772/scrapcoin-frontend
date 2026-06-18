@@ -24,7 +24,7 @@ const NAV_ITEMS = [
 
 function NavLinks({ onClose }: { onClose?: () => void }) {
   const { pathname } = useRouterState({ select: (s) => s.location });
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
   const navigate = useNavigate();
 
   async function handleSignOut() {
@@ -37,9 +37,16 @@ function NavLinks({ onClose }: { onClose?: () => void }) {
     }
   }
 
+  const filteredNavItems = NAV_ITEMS.filter(({ to }) => {
+    if (profile?.role === "champion") {
+      return to === "/admin" || to === "/admin/bookings";
+    }
+    return true;
+  });
+
   return (
     <nav className="flex flex-col gap-1 flex-1">
-      {NAV_ITEMS.map(({ to, label, icon: Icon, exact }) => {
+      {filteredNavItems.map(({ to, label, icon: Icon, exact }) => {
         const active = exact ? pathname === to : pathname.startsWith(to);
         return (
           <Link

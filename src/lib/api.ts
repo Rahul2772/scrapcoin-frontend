@@ -49,3 +49,18 @@ export async function createBooking(payload: BookingPayload, token?: string) {
 export async function fetchLivePickupDemo(): Promise<LivePickup> {
   return parseJson<LivePickup>(await fetch(`${API_BASE}/api/live-pickup/demo`));
 }
+
+export type CircularImpactItem = {
+  categoryId: string;
+  label: string;
+  weightKg: number;
+};
+
+export type CircularImpact = {
+  grandTotalKg: number;
+  breakdown: CircularImpactItem[];
+};
+
+export async function fetchCircularImpact(): Promise<CircularImpact> {
+  return parseJson<CircularImpact>(await fetch(`${API_BASE}/api/live-pickup/impact`));
+}

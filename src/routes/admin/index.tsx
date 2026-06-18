@@ -47,7 +47,7 @@ function AdminDashboard() {
 useEffect(() => {
   if (authLoading) return;
   if (!user) { navigate({ to: "/" }); return; }
-  if (profile && profile.role !== "admin") { navigate({ to: "/" }); return; }
+  if (profile && profile.role !== "admin" && profile.role !== "champion") { navigate({ to: "/" }); return; }
 }, [user, profile, authLoading, navigate]);
 
   useEffect(() => {
