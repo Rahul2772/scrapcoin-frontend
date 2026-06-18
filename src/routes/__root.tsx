@@ -79,7 +79,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-function NavAuth() {
+export function NavAuth() {
   const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -220,9 +220,6 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <div className="fixed top-4 right-4 z-50">
-          <NavAuth />
-        </div>
         <Outlet />
       </AuthProvider>
     </QueryClientProvider>

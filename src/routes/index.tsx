@@ -32,6 +32,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { BrandLogo } from "@/components/brand-logo";
 import { WhatsAppFAB, WhatsAppLink } from "@/components/whatsapp-button";
 import { createBooking, fetchLivePickupDemo, type LivePickup } from "@/lib/api";
+import { NavAuth } from "./__root";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -130,9 +131,12 @@ function Index() {
           <a href="#top" aria-label="The Scrap Co. home">
             <BrandLogo size={56} />
           </a>
-          <a href="#booking" className="hidden sm:block">
-            <Button size="sm" className="rounded-full">Schedule a Pickup</Button>
-          </a>
+          <div className="flex items-center gap-3">
+            <a href="#booking" className="hidden sm:block">
+              <Button size="sm" className="rounded-full">Schedule a Pickup</Button>
+            </a>
+            <NavAuth />
+          </div>
         </div>
       </header>
 

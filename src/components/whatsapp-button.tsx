@@ -39,7 +39,7 @@ export function WhatsAppFAB() {
     <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3">
       {/* Label bubble */}
       <span
-        className={`rounded-full bg-white px-4 py-2 text-sm font-medium text-emerald-700 shadow-lg transition-all duration-500 ${
+        className={`hidden sm:inline-block rounded-full bg-white px-4 py-2 text-sm font-medium text-emerald-700 shadow-lg transition-all duration-500 ${
           showLabel ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"
         }`}
         style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}

@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
 import { useAuth } from "@/context/AuthContext";
+import { NavAuth } from "./__root";
 
 export const Route = createFileRoute("/my-bookings")({
   component: MyBookingsPage,
@@ -104,7 +105,10 @@ function MyBookingsPage() {
           <Link to="/">
             <BrandLogo />
           </Link>
-          <h1 className="text-lg font-semibold text-foreground">My Bookings</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-semibold text-foreground hidden sm:block">My Bookings</h1>
+            <NavAuth />
+          </div>
         </div>
       </div>
 
