@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface BrandLogoProps {
@@ -8,63 +9,64 @@ interface BrandLogoProps {
 }
 
 /**
- * "Eco-friendly & Circular" brand mark for The Scrap Co.
- * Three rotating rings around a central leaf.
+ * Brand mark for The Scrap Co. using the official logo image
  */
 export function BrandLogo({
   className,
   showWordmark = true,
   showTagline = false,
-  size = 40,
+  size = 48, // Increased default size for better visibility
 }: BrandLogoProps) {
-  const ring = "absolute inset-0 rounded-full border-[3px]";
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
-    <div className={cn("flex items-center gap-2.5", className)}>
+    <div
+      className={cn("flex items-center gap-3.5 cursor-pointer select-none", className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Premium Squircle Logo Box */}
       <div
-        className="relative shrink-0"
-        style={{ width: size, height: size }}
+        className="relative shrink-0 overflow-hidden rounded-[24%] border-2 border-emerald-500/30 bg-[#0e4923] transition-all duration-300"
+        style={{
+          width: size,
+          height: size,
+          boxShadow: isHovered
+            ? "0 6px 20px -4px oklch(0.60 0.18 150 / 0.3), inset 0 1px 1px oklch(1 0 0 / 0.15)"
+            : "0 2px 8px -2px oklch(0.12 0.04 150 / 0.15)",
+          transform: isHovered ? "translateY(-1px) scale(1.02)" : "none",
+        }}
         aria-hidden
       >
-        <span
-          className={cn(ring, "animate-[spin_6s_linear_infinite]")}
-          style={{ borderColor: "oklch(0.62 0.18 150)", borderTopColor: "transparent" }}
-        />
-        <span
-          className={cn(ring, "animate-[spin_8s_linear_infinite_reverse]")}
-          style={{ borderColor: "oklch(0.78 0.16 150)", borderRightColor: "transparent" }}
-        />
-        <span
-          className={cn(ring, "animate-[spin_10s_linear_infinite]")}
-          style={{ borderColor: "oklch(0.86 0.13 150)", borderBottomColor: "transparent" }}
-        />
-        <span
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        <img
+          src="/images/logo.jpg"
+          alt="The Scrap Co."
+          className="w-full h-full object-cover transition-transform duration-500 ease-out"
           style={{
-            width: size * 0.38,
-            height: size * 0.38,
-            background: "linear-gradient(135deg, oklch(0.62 0.18 150), oklch(0.50 0.16 155))",
-            borderRadius: "0 100% 0 100%",
+            transform: isHovered ? "scale(2.05)" : "scale(1.85)",
+            transformOrigin: "center 36%",
           }}
         />
       </div>
       {showWordmark && (
         <div className="leading-tight">
           <span
-            className="block bg-clip-text text-transparent font-bold tracking-tight"
+            className="block bg-clip-text text-transparent font-black tracking-wider uppercase transition-colors duration-300"
             style={{
               backgroundImage:
-                "linear-gradient(135deg, oklch(0.62 0.18 150), oklch(0.48 0.15 155))",
-              fontSize: size * 0.58,
+                "linear-gradient(135deg, oklch(0.60 0.18 150), oklch(0.40 0.15 155))",
+              fontSize: size * 0.44,
+              letterSpacing: "0.06em",
             }}
           >
             The Scrap Co.
           </span>
           {showTagline && (
             <span
-              className="block font-semibold"
-              style={{ color: "oklch(0.55 0.16 150)", fontSize: size * 0.28 }}
+              className="block font-bold tracking-[0.25em] uppercase mt-0.5"
+              style={{ color: "oklch(0.50 0.15 150)", fontSize: size * 0.20 }}
             >
-              Sustainable Solutions
+              Waste To Worth
             </span>
           )}
         </div>
@@ -72,3 +74,6 @@ export function BrandLogo({
     </div>
   );
 }
+
+
+

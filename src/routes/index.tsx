@@ -126,7 +126,7 @@ function Index() {
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <a href="#top" aria-label="The Scrap Co. home">
-            <BrandLogo size={56} />
+            <BrandLogo size={60} />
           </a>
           <div className="flex items-center gap-3">
             <Link
