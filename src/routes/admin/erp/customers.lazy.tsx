@@ -7,6 +7,7 @@ import {
   createERPCustomer,
   updateERPCustomer,
   deleteERPCustomer,
+  triggerCustomer30DayNotification,
   type ERPCustomer,
 } from "@/lib/api";
 import { groupReceipts, type GroupedERPPurchaseReceipt } from "@/lib/utils";
@@ -28,6 +29,10 @@ import {
   FileText,
   MessageSquare,
   Wallet,
+  Bell,
+  AlertTriangle,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import {
   Dialog,
@@ -66,6 +71,7 @@ function ERPCustomersPage() {
   const [idType, setIdType] = useState("Aadhaar");
   const [idNumber, setIdNumber] = useState("");
   const [notes, setNotes] = useState("");
+  const [lastReceiptDate, setLastReceiptDate] = useState("");
 
   useEffect(() => {
     loadCustomers();
@@ -96,6 +102,7 @@ function ERPCustomersPage() {
     setIdType("Aadhaar");
     setIdNumber("");
     setNotes("");
+    setLastReceiptDate("");
     setDialogOpen(true);
   }
 
@@ -109,6 +116,7 @@ function ERPCustomersPage() {
     setIdType(c.id_type || "Aadhaar");
     setIdNumber(c.id_number || "");
     setNotes(c.notes || "");
+    setLastReceiptDate(c.last_receipt_date ? c.last_receipt_date.split("T")[0] : "");
     setDialogOpen(true);
   }
 
@@ -120,6 +128,9 @@ function ERPCustomersPage() {
     try {
       const res = await fetchERPCustomerDetail(c.id, session?.access_token);
       if (res.success) {
+        if (res.customer) {
+          setSelectedCustomer(res.customer);
+        }
         setRecentReceipts(groupReceipts(res.receipts));
       }
     } catch {
@@ -129,11 +140,22 @@ function ERPCustomersPage() {
     }
   }
 
+  async function handleTriggerNotification(c: ERPCustomer) {
+    try {
+      const res = await triggerCustomer30DayNotification(c.id, session?.access_token);
+      if (res.success) {
+        toast.success(`Admin notification generated for ${c.name}`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to trigger notification");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return toast.error("Customer name is required");
 
-    const payload = {
+    const payload: Partial<ERPCustomer> = {
       name: name.trim(),
       phone: phone.trim() || null,
       whatsapp: whatsapp.trim() || null,
@@ -142,6 +164,7 @@ function ERPCustomersPage() {
       id_type: idType || null,
       id_number: idNumber.trim() || null,
       notes: notes.trim() || null,
+      last_receipt_date: lastReceiptDate ? new Date(lastReceiptDate).toISOString() : null,
     };
 
     try {
@@ -177,6 +200,7 @@ function ERPCustomersPage() {
       toast.error(err.message || "Failed to delete customer");
     }
   }
+
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -233,6 +257,7 @@ function ERPCustomersPage() {
                   <th className="px-6 py-4">Customer</th>
                   <th className="px-6 py-4">Phone / Contact</th>
                   <th className="px-6 py-4">Verification ID</th>
+                  <th className="px-6 py-4">Last Receipt / Pickup</th>
                   <th className="px-6 py-4 text-right">Pickups visits</th>
                   <th className="px-6 py-4 text-right">Lifetime Paid</th>
                   <th className="px-6 py-4 text-right">Actions</th>
@@ -278,10 +303,44 @@ function ERPCustomersPage() {
                         "—"
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right font-semibold text-foreground">{c.total_visits} collections</td>
-                    <td className="px-6 py-4 text-right font-bold text-foreground">₹ {c.total_paid?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-1">
+                        {c.last_receipt_date ? (
+                          <>
+                            <span className="font-medium text-foreground flex items-center gap-1.5 text-[11px]">
+                              <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+                              {new Date(c.last_receipt_date).toLocaleDateString("en-IN")}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-2.5 w-2.5" />
+                              {c.days_since_last_receipt !== null && c.days_since_last_receipt !== undefined
+                                ? `${c.days_since_last_receipt} days ago`
+                                : "Recorded"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground italic text-[11px]">No receipts recorded</span>
+                        )}
+                        {c.is_30_day_alert && (
+                          <Badge variant="outline" className="mt-0.5 w-fit border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-semibold gap-1 px-1.5 py-0">
+                            <AlertTriangle className="h-2.5 w-2.5" /> 30+ Days Follow-up
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right font-semibold text-foreground">{c.total_visits || c.visit_count || 0} collections</td>
+                    <td className="px-6 py-4 text-right font-bold text-foreground">₹ {(c.total_paid || c.lifetime_paid || 0).toLocaleString()}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleTriggerNotification(c)}
+                          className="h-7 w-7 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                          title="Generate 30-Day Admin Notification"
+                        >
+                          <Bell className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -317,12 +376,13 @@ function ERPCustomersPage() {
                 ))}
                 {customers.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">
                       No household customers registered. Click "Add Household Customer" to create.
                     </td>
                   </tr>
                 )}
               </tbody>
+
             </table>
           </div>
         </div>
@@ -426,15 +486,28 @@ function ERPCustomersPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="cust-notes">Internal Remarks / Notes</Label>
-              <Input
-                id="cust-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="RWA coordinator, bulk supplier..."
-                className="rounded-xl border border-border"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="cust-notes">Internal Remarks / Notes</Label>
+                <Input
+                  id="cust-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="RWA coordinator, bulk supplier..."
+                  className="rounded-xl border border-border"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cust-last-receipt">Last Pickup / Receipt Date</Label>
+                <Input
+                  id="cust-last-receipt"
+                  type="date"
+                  value={lastReceiptDate}
+                  onChange={(e) => setLastReceiptDate(e.target.value)}
+                  className="rounded-xl border border-border"
+                />
+              </div>
             </div>
 
             <DialogFooter className="pt-2">
@@ -460,6 +533,30 @@ function ERPCustomersPage() {
 
           {selectedCustomer && (
             <div className="space-y-5">
+              {/* 30-Day Pickup Trigger Alert Banner */}
+              {selectedCustomer.is_30_day_alert && (
+                <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3.5 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <div>
+                      <p className="font-bold">30+ Days Pickup Alert Active</p>
+                      <p className="text-[11px] opacity-90">
+                        {selectedCustomer.days_since_last_receipt !== null && selectedCustomer.days_since_last_receipt !== undefined
+                          ? `${selectedCustomer.days_since_last_receipt} days since last pickup date.`
+                          : "30+ days passed since last pickup."} Time to follow up!
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleTriggerNotification(selectedCustomer)}
+                    className="rounded-lg bg-amber-600 text-white hover:bg-amber-700 text-xs px-2.5 py-1 gap-1 cursor-pointer shrink-0"
+                  >
+                    <Bell className="h-3 w-3" /> Send Admin Alert
+                  </Button>
+                </div>
+              )}
+
               {/* Profile summary card */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-2 text-xs">
                 <div className="flex justify-between">
@@ -472,10 +569,16 @@ function ERPCustomersPage() {
                   {selectedCustomer.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3 text-primary" /> Phone: {selectedCustomer.phone}</span>}
                   {selectedCustomer.whatsapp && <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3 text-emerald-600" /> WhatsApp: {selectedCustomer.whatsapp}</span>}
                   {selectedCustomer.upi && <span className="flex items-center gap-1"><Wallet className="h-3 w-3 text-indigo-600" /> UPI: {selectedCustomer.upi}</span>}
+                  {selectedCustomer.last_receipt_date && (
+                    <span className="flex items-center gap-1 font-medium text-foreground">
+                      <Calendar className="h-3 w-3 text-primary" /> Last Pickup: {new Date(selectedCustomer.last_receipt_date).toLocaleDateString("en-IN")} ({selectedCustomer.days_since_last_receipt ?? "?"}d ago)
+                    </span>
+                  )}
                   {selectedCustomer.address && <span className="col-span-2 flex items-start gap-1 mt-1 border-t border-border/40 pt-1"><MapPin className="h-3 w-3 text-primary mt-0.5 shrink-0" /> {selectedCustomer.address}</span>}
                   {selectedCustomer.id_type && <span className="col-span-2 flex items-center gap-1"><FileText className="h-3 w-3 text-primary shrink-0" /> ID verified — {selectedCustomer.id_type}: {selectedCustomer.id_number}</span>}
                 </div>
               </div>
+
 
               {/* Purchase receipts log */}
               <div>

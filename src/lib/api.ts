@@ -110,6 +110,9 @@ export type ERPCustomer = {
   id_number?: string | null;
   total_visits?: number;
   total_paid?: number;
+  last_receipt_date?: string | null;
+  days_since_last_receipt?: number | null;
+  is_30_day_alert?: boolean;
   is_active: boolean;
   notes?: string | null;
   created_at: string;
@@ -361,6 +364,12 @@ export async function updateERPCustomer(customerId: string, payload: Partial<ERP
 export async function deleteERPCustomer(customerId: string, token?: string): Promise<{ success: boolean; message: string }> {
   return authFetch(`${API_BASE}/api/erp/customers/${customerId}`, token, {
     method: "DELETE",
+  });
+}
+
+export async function triggerCustomer30DayNotification(customerId: string, token?: string): Promise<{ success: boolean; message: string; notification?: any }> {
+  return authFetch(`${API_BASE}/api/erp/customers/${customerId}/trigger-30-day-notification`, token, {
+    method: "POST",
   });
 }
 

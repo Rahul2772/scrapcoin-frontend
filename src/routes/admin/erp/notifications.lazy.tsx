@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   XCircle,
   Truck,
+  User,
 } from "lucide-react";
 
 export const Route = createLazyFileRoute("/admin/erp/notifications")({
@@ -92,6 +93,8 @@ function ERPNotificationsPage() {
         return <CheckCircle2 className="h-4 w-4 text-amber-500" />;
       case "champion_assigned":
         return <Truck className="h-4 w-4 text-blue-500" />;
+      case "customer_30_days":
+        return <User className="h-4 w-4 text-amber-500" />;
       default:
         return <Bell className="h-4 w-4 text-zinc-500" />;
     }
@@ -105,10 +108,13 @@ function ERPNotificationsPage() {
         return "border-l-4 border-amber-500 bg-amber-500/5";
       case "champion_assigned":
         return "border-l-4 border-blue-500 bg-blue-500/5";
+      case "customer_30_days":
+        return "border-l-4 border-amber-500 bg-amber-500/10";
       default:
         return "border-l-4 border-zinc-400 bg-zinc-400/5";
     }
   };
+
 
   return (
     <div className="space-y-6">
