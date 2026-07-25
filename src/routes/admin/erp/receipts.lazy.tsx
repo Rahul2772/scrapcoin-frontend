@@ -212,16 +212,17 @@ function ERPReceiptsPage() {
       if (editingReceipt) {
         const res = await updateERPPurchaseReceipt(editingReceipt.id, payload, session?.access_token);
         if (res.success) {
-          toast.success("B2C Pickup receipt updated successfully!");
+          // Reload the list first so the updated data is ready, THEN close the dialog
+          await loadReceipts();
           setDialogOpen(false);
-          loadReceipts();
+          toast.success("B2C Pickup receipt updated successfully!");
         }
       } else {
         const res = await createERPPurchaseReceipt(payload, session?.access_token);
         if (res.success) {
-          toast.success("B2C Pickup receipt recorded successfully!");
+          await loadReceipts();
           setDialogOpen(false);
-          loadReceipts();
+          toast.success("B2C Pickup receipt recorded successfully!");
         }
       }
     } catch (err: any) {
@@ -230,6 +231,7 @@ function ERPReceiptsPage() {
       setSubmitting(false);
     }
   }
+
 
   async function handleDelete(id: string) {
     if (!confirm("Delete B2C scale receipt? This reverses material stock counts and clears customer visit figures. Proceed?")) return;
