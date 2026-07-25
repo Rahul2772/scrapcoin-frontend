@@ -167,7 +167,7 @@ function ERPReceiptsPage() {
   function openEdit(r: GroupedERPPurchaseReceipt) {
     setEditingReceipt(r);
     setCustomerId(r.customer_id || "");
-    setPayMethod(r.payment_method);
+    setPayMethod(r.payment_method || "cash");
     setNotes(r.notes || "");
     setDate(new Date(r.created_at).toISOString().split("T")[0]);
 
@@ -179,9 +179,18 @@ function ERPReceiptsPage() {
           price: m.price_per_unit,
         }))
       );
+    } else {
+      setItems([
+        {
+          materialId: (r as any).material_id || "",
+          weight: r.weight || "",
+          price: r.price_per_unit || "",
+        },
+      ]);
     }
     setDialogOpen(true);
   }
+
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

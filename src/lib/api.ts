@@ -415,9 +415,13 @@ export async function payERPInvoice(invoiceId: string, paymentMethod: string, no
 }
 
 export async function fetchERPPurchaseReceipts(token?: string, customerId?: string): Promise<{ success: boolean; receipts: ERPPurchaseReceipt[] }> {
-  const url = customerId ? `${API_BASE}/api/erp/purchase-receipts?customer_id=${customerId}` : `${API_BASE}/api/erp/purchase-receipts`;
-  return authFetch(url, token);
+  const ts = Date.now();
+  const url = customerId
+    ? `${API_BASE}/api/erp/purchase-receipts?customer_id=${customerId}&_t=${ts}`
+    : `${API_BASE}/api/erp/purchase-receipts?_t=${ts}`;
+  return authFetch(url, token, { cache: "no-store" });
 }
+
 
 export async function createERPPurchaseReceipt(payload: any, token?: string): Promise<{ success: boolean; receipt: ERPPurchaseReceipt }> {
   return authFetch(`${API_BASE}/api/erp/purchase-receipts`, token, {
