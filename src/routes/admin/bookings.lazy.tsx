@@ -956,156 +956,56 @@ useEffect(() => {
                   )}
                 </div>
 
-                {!showWeightForm && (
+                <div className="pt-4 border-t border-border">
+                  <p className="text-muted-foreground mb-2">Update Status</p>
+                  <Select
+                    value={selected.status}
+                    onValueChange={(val) => {
+                      updateStatus(selected.id, val);
+                    }}
+                    disabled={updating || (profile?.role === "champion" && selected.status === "completed")}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {profile?.role === "admin" ? (
                   <div className="pt-4 border-t border-border">
-                    <p className="text-muted-foreground mb-2">Update Status</p>
+                    <p className="text-muted-foreground mb-2">Assign Champion</p>
                     <Select
-                      value={selected.status}
+                      value={selected.championId ?? "unassigned"}
                       onValueChange={(val) => {
-                        if (val === "completed") {
-                          const initial: Record<string, string> = {};
-                          selected.materials.forEach((m) => {
-                            initial[m] = "";
-                          });
-                          setWeightsForm(initial);
-                          setShowWeightForm(true);
-                        } else {
-                          updateStatus(selected.id, val);
-                        }
+                        updateChampion(selected.id, val === "unassigned" ? null : val);
                       }}
-                      disabled={updating || (profile?.role === "champion" && selected.status === "completed")}
+                      disabled={updating}
                     >
                       <SelectTrigger className="rounded-xl">
-                        <SelectValue />
+                        <SelectValue placeholder="Select Champion" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="scheduled">Scheduled</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {champions.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.email}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-
-                {!showWeightForm && (
-                  <>
-                    {profile?.role === "admin" ? (
-                      <div className="pt-4 border-t border-border">
-                        <p className="text-muted-foreground mb-2">Assign Champion</p>
-                        <Select
-                          value={selected.championId ?? "unassigned"}
-                          onValueChange={(val) => {
-                            updateChampion(selected.id, val === "unassigned" ? null : val);
-                          }}
-                          disabled={updating}
-                        >
-                          <SelectTrigger className="rounded-xl">
-                            <SelectValue placeholder="Select Champion" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {champions.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : (
-                      <div className="pt-4 border-t border-border">
-                        <p className="text-muted-foreground">Assigned Champion</p>
-                        <p className="font-medium text-foreground">
-                          {selected.championEmail ?? "Unassigned"}
-                        </p>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {showWeightForm && (
-                  <div className="space-y-4 pt-4 border-t border-border">
-                    <p className="font-semibold text-foreground text-xs uppercase tracking-wider">Record Actual Weights (kg)</p>
-                    <div className="space-y-3">
-                      {selected.materials.map((m) => (
-                        <div key={m} className="space-y-1">
-                          <Label htmlFor={`weight-${m}`} className="text-xs text-muted-foreground">{m}</Label>
-                          <Input
-                            id={`weight-${m}`}
-                            type="number"
-                            step="any"
-                            placeholder="0.0"
-                            value={weightsForm[m] ?? ""}
-                            onChange={(e) =>
-                              setWeightsForm((prev) => ({ ...prev, [m]: e.target.value }))
-                            }
-                            className="rounded-xl"
-                            required
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full rounded-xl cursor-pointer"
-                        onClick={() => setShowWeightForm(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="w-full rounded-xl cursor-pointer"
-                        disabled={updating}
-                        onClick={async () => {
-                          const weightsPayload: Record<string, number> = {};
-                          let isValid = true;
-                          selected.materials.forEach((m) => {
-                            const val = Number(weightsForm[m]);
-                            if (isNaN(val) || val <= 0) {
-                              isValid = false;
-                            }
-                            weightsPayload[m] = val;
-                          });
-                          if (!isValid) {
-                            toast.error("Please enter a valid positive number for all weights.");
-                            return;
-                          }
-
-                          setUpdating(true);
-                          try {
-                            const res = await fetch(`${API_BASE}/api/bookings/${selected.id}`, {
-                              method: "PATCH",
-                              headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${session!.access_token}`,
-                              },
-                              body: JSON.stringify({
-                                status: "completed",
-                                actualWeights: weightsPayload,
-                              }),
-                            });
-                            if (!res.ok) throw new Error("Failed");
-                            const updated: Booking = await res.json();
-                            setBookings((prev) =>
-                              prev.map((b) => (b.id === selected.id ? updated : b))
-                            );
-                            setSelected(updated);
-                            setShowWeightForm(false);
-                            toast.success("Order completed with weights!");
-                            toast.info("Customer automatically added/updated in ERP Customers", { duration: 4000 });
-                          } catch {
-                            toast.error("Failed to complete order");
-                          } finally {
-                            setUpdating(false);
-                          }
-                        }}
-                      >
-                        {updating ? "Completing..." : "Complete Pickup"}
-                      </Button>
-                    </div>
+                ) : (
+                  <div className="pt-4 border-t border-border">
+                    <p className="text-muted-foreground">Assigned Champion</p>
+                    <p className="font-medium text-foreground">
+                      {selected.championEmail ?? "Unassigned"}
+                    </p>
                   </div>
                 )}
 
