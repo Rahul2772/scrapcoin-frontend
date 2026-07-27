@@ -52,21 +52,14 @@ type Booking = {
   source?: "website" | "whatsapp" | "admin";
 };
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<
+  Booking["status"],
+  { label: string; className: string }
+> = {
   scheduled: { label: "Scheduled", className: "bg-blue-100 text-blue-700 border-blue-200" },
   in_progress: { label: "In Progress", className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
   completed: { label: "Completed", className: "bg-green-100 text-green-700 border-green-200" },
   cancelled: { label: "Cancelled", className: "bg-red-100 text-red-700 border-red-200" },
-};
-
-const STATUS_CONFIG: Record<
-  Booking["status"],
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-> = {
-  scheduled: { label: "Scheduled", variant: "outline" },
-  in_progress: { label: "In Progress", variant: "secondary" },
-  completed: { label: "Completed", variant: "default" },
-  cancelled: { label: "Cancelled", variant: "destructive" },
 };
 
 const SOURCE_CONFIG: Record<
