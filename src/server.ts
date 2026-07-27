@@ -167,15 +167,17 @@ export default {
     // This avoids the SSR handler which has no route for API calls and would
     // hang or crash on PUT/DELETE requests.
     if (pathname.startsWith("/api/")) {
-      const backendUrl = "https://api.scrapco.in";
-      const url = new URL(request.url);
-      const proxiedUrl = `${backendUrl}${url.pathname}${url.search}`;
-      return fetch(proxiedUrl, {
+      const proxiedUrl = `https://api.scrapco.in${pathname}${new URL(request.url).search}`;
+      // Clone the request to the new URL, preserving method/headers/body
+      const proxiedRequest = new Request(proxiedUrl, {
         method: request.method,
         headers: request.headers,
-        body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
+        body: request.method !== "GET" && request.method !== "HEAD" ? request.body : null,
         redirect: "follow",
+        // @ts-ignore – required in some runtimes to stream a body in a fetch
+        duplex: "half",
       });
+      return fetch(proxiedRequest);
     }
 
     try {

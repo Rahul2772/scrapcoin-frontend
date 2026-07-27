@@ -30,6 +30,9 @@ jobs:
         env:
           # Add any public build-time env vars here (non-secret)
           NODE_ENV: production
+          VITE_API_URL: https://api.scrapco.in
+          VITE_SUPABASE_URL: https://mtzvoeohbifxmertnwwy.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_hqVgHskOyz-dcyMVG0kURg_Yin7El1X
 
       - name: Deploy via Wrangler
         run: npx wrangler deploy --config dist/server/wrangler.json
