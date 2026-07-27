@@ -63,12 +63,24 @@ const STATUS_CONFIG: Record<
 };
 
 const SOURCE_CONFIG: Record<
-  NonNullable<Booking["source"]>,
-  { label: string; icon: typeof Globe }
+  string,
+  { label: string; icon: React.ReactNode; className: string }
 > = {
-  website: { label: "Website", icon: Globe },
-  whatsapp: { label: "WhatsApp", icon: MessageCircle },
-  admin: { label: "Admin", icon: Shield },
+  website: {
+    label: "Website",
+    icon: <Globe className="h-3 w-3" />,
+    className: "bg-purple-100 text-purple-700 border-purple-200",
+  },
+  whatsapp: {
+    label: "WhatsApp",
+    icon: <MessageCircle className="h-3 w-3" />,
+    className: "bg-green-100 text-green-700 border-green-200",
+  },
+  admin: {
+    label: "Admin",
+    icon: <Shield className="h-3 w-3" />,
+    className: "bg-orange-100 text-orange-700 border-orange-200",
+  },
 };
 
 const FILTERS = ["all", "scheduled", "in_progress", "completed", "cancelled"] as const;
