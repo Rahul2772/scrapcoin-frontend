@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
-import { Trash2, Plus, MessageCircle, Globe, Shield, Save, UserCheck } from "lucide-react";
+import { Trash2, Plus, MessageCircle, Globe, Shield, Save, UserCheck, Edit2 } from "lucide-react";
 
 export const Route = createLazyFileRoute("/admin/bookings")({
   component: AdminBookings,
@@ -124,6 +124,11 @@ function AdminBookings() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState<AdminBookingForm>(emptyForm());
   const [creating, setCreating] = useState(false);
+
+  // Edit booking dialog
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState<AdminBookingForm>(emptyForm());
+  const [editing, setEditing] = useState(false);
 
 // Auth guard — wait for both auth AND profile to load
 useEffect(() => {
@@ -296,6 +301,71 @@ useEffect(() => {
       toast.success("Booking permanently deleted");
     } catch (err: any) {
       toast.error(err.message || "Failed to delete booking");
+    }
+  }
+
+  function openEditDialog(booking: Booking) {
+    setEditForm({
+      fullName: booking.fullName,
+      phone: booking.phone,
+      society: booking.society,
+      tower: booking.tower ?? "",
+      pickupDate: booking.pickupDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+      materials: booking.materials ?? [],
+      source: booking.source ?? "whatsapp",
+      status: booking.status,
+      inquiryDate: booking.inquiryDate?.slice(0, 10) ?? "",
+      lastCommunicationDate: booking.lastCommunicationDate?.slice(0, 10) ?? "",
+      statusComments: booking.statusComments ?? "",
+    });
+    setShowEditDialog(true);
+  }
+
+  async function handleEditBooking() {
+    if (!selected) return;
+    if (!editForm.fullName.trim() || !editForm.phone.trim() || !editForm.society.trim()) {
+      toast.error("Name, Phone, and Society are required");
+      return;
+    }
+    if (editForm.materials.length === 0) {
+      toast.error("Please select at least one material");
+      return;
+    }
+    setEditing(true);
+    try {
+      const payload: Record<string, unknown> = {
+        fullName: editForm.fullName.trim(),
+        phone: editForm.phone.trim(),
+        society: editForm.society.trim(),
+        tower: editForm.tower.trim() || null,
+        pickupDate: editForm.pickupDate,
+        materials: editForm.materials,
+        source: editForm.source,
+      };
+
+      const res = await fetch(`${API_BASE}/api/bookings/${selected.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session!.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error ?? "Failed to update booking");
+      }
+
+      const updated: Booking = await res.json();
+      setBookings((prev) => prev.map((b) => (b.id === selected.id ? updated : b)));
+      setSelected(updated);
+      setShowEditDialog(false);
+      toast.success("Booking updated successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update booking");
+    } finally {
+      setEditing(false);
     }
   }
 
@@ -719,15 +789,28 @@ useEffect(() => {
           {selected && (
             <>
               <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  Booking Details
-                  {selected.source && (
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${SOURCE_CONFIG[selected.source]?.className ?? ""}`}>
-                      {SOURCE_CONFIG[selected.source]?.icon}
-                      {SOURCE_CONFIG[selected.source]?.label}
-                    </span>
+                <div className="flex items-center justify-between gap-2 pr-2">
+                  <SheetTitle className="flex items-center gap-2">
+                    Booking Details
+                    {selected.source && (
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${SOURCE_CONFIG[selected.source]?.className ?? ""}`}>
+                        {SOURCE_CONFIG[selected.source]?.icon}
+                        {SOURCE_CONFIG[selected.source]?.label}
+                      </span>
+                    )}
+                  </SheetTitle>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 rounded-xl text-xs cursor-pointer"
+                      onClick={() => openEditDialog(selected)}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
                   )}
-                </SheetTitle>
+                </div>
               </SheetHeader>
               <div className="mt-6 space-y-4 text-sm">
                 <div className="grid grid-cols-2 gap-4">
@@ -1058,6 +1141,134 @@ useEffect(() => {
           )}
         </SheetContent>
       </Sheet>
+      {/* ── Edit Booking Dialog ── */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <Edit2 className="h-5 w-5 text-primary" />
+              Edit Booking
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-sm">
+            {/* Core Info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="eb-fullName">Full Name *</Label>
+                <Input
+                  id="eb-fullName"
+                  value={editForm.fullName}
+                  onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                  placeholder="e.g. Rahul Sharma"
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="eb-phone">Phone *</Label>
+                <Input
+                  id="eb-phone"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  placeholder="+91 9876543210"
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="eb-society">Society / Area *</Label>
+                <Input
+                  id="eb-society"
+                  value={editForm.society}
+                  onChange={(e) => setEditForm({ ...editForm, society: e.target.value })}
+                  placeholder="e.g. Green Valley Society"
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="eb-tower">Tower / Block</Label>
+                <Input
+                  id="eb-tower"
+                  value={editForm.tower}
+                  onChange={(e) => setEditForm({ ...editForm, tower: e.target.value })}
+                  placeholder="e.g. A, B3, Tower 2"
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            {/* Source & Pickup Date */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Source</Label>
+                <Select
+                  value={editForm.source}
+                  onValueChange={(v) => setEditForm({ ...editForm, source: v as AdminBookingForm["source"] })}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="website">Website</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="eb-pickupDate">Scheduled Pickup Date *</Label>
+                <Input
+                  id="eb-pickupDate"
+                  type="date"
+                  value={editForm.pickupDate}
+                  onChange={(e) => setEditForm({ ...editForm, pickupDate: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            {/* Materials */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Materials * {editForm.materials.length > 0 && `(${editForm.materials.length} selected)`}
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {availableMaterials.map((mat) => (
+                  <button
+                    key={mat}
+                    type="button"
+                    onClick={() => toggleMaterial(mat, editForm, setEditForm)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
+                      editForm.materials.includes(mat)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {mat}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+              className="rounded-xl cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditBooking}
+              disabled={editing}
+              className="rounded-xl cursor-pointer gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {editing ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }
