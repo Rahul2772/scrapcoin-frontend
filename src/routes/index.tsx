@@ -37,7 +37,7 @@ import { WhatsAppFAB, WhatsAppLink } from "@/components/whatsapp-button";
 import { createBooking, fetchCircularImpact, type CircularImpact } from "@/lib/api";
 import { NavAuth } from "./__root";
 import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
+import { isPincodeSupported, PINCODE_LOCATION_MAP } from "@/lib/pincodes";
 import * as Sentry from "@sentry/react";
 
 export const Route = createFileRoute("/")({
@@ -90,6 +90,7 @@ function Index() {
   const { session } = useAuth();
   const [date, setDate] = useState<Date>();
   const [materials, setMaterials] = useState<string[]>([]);
+  const [pincodeInput, setPincodeInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [impact, setImpact] = useState<CircularImpact>(FALLBACK_IMPACT);
   const [bookingSuccessData, setBookingSuccessData] = useState<{
@@ -129,6 +130,18 @@ function Index() {
       toast.error("Please fill all required fields and pick a date.");
       return;
     }
+
+    const cleanPin = pincodeInput.trim();
+    if (!cleanPin || cleanPin.length !== 6) {
+      toast.error("Please enter a valid 6-digit Pincode to check pickup availability.");
+      return;
+    }
+
+    if (!isPincodeSupported(cleanPin)) {
+      toast.error(`Pickup is currently not available for pincode ${cleanPin}. Serviceable areas are Noida, Greater Noida, Noida Extension & Indirapuram.`);
+      return;
+    }
+
     if (materials.length === 0) {
       toast.error("Please select at least one material type.");
       return;
@@ -139,8 +152,9 @@ function Index() {
       const payload = {
         fullName: String(data.get("fullName")),
         phone: String(data.get("phone")),
-        society: String(data.get("society")),
+        society: `${String(data.get("society"))} (PIN: ${cleanPin})`,
         tower: String(data.get("tower") || "") || undefined,
+        pincode: cleanPin,
         pickupDate: format(date, "yyyy-MM-dd"),
         materials,
       };
@@ -151,6 +165,7 @@ function Index() {
       toast.success(result.message);
       setBookingSuccessData(payload);
       form.reset();
+      setPincodeInput("");
       setDate(undefined);
       setMaterials([]);
     } catch (err) {
@@ -507,6 +522,45 @@ function Index() {
               <div className="space-y-2">
                 <Label htmlFor="tower">Tower & flat number</Label>
                 <Input id="tower" name="tower" placeholder="Tower B • Flat 1204" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="pincode">Pincode *</Label>
+                  {pincodeInput.length === 6 && (
+                    <span className={cn(
+                      "text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1",
+                      isPincodeSupported(pincodeInput) ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-red-500/10 text-red-600 border border-red-500/20"
+                    )}>
+                      {isPincodeSupported(pincodeInput) ? "✓ Serviceable" : "✕ Not Serviceable"}
+                    </span>
+                  )}
+                </div>
+                <Input
+                  id="pincode"
+                  name="pincode"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="e.g. 201306"
+                  value={pincodeInput}
+                  onChange={(e) => setPincodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  className={cn(
+                    "rounded-xl transition-all",
+                    pincodeInput.length === 6 && !isPincodeSupported(pincodeInput) && "border-red-500 focus-visible:ring-red-500 bg-red-50/20",
+                    pincodeInput.length === 6 && isPincodeSupported(pincodeInput) && "border-emerald-500 focus-visible:ring-emerald-500 bg-emerald-50/20"
+                  )}
+                />
+                {pincodeInput.length === 6 && isPincodeSupported(pincodeInput) && (
+                  <p className="text-xs text-emerald-600 font-medium">
+                    📍 Area: {PINCODE_LOCATION_MAP[pincodeInput] || "Serviceable Area"}
+                  </p>
+                )}
+                {pincodeInput.length === 6 && !isPincodeSupported(pincodeInput) && (
+                  <p className="text-xs text-red-500 font-medium">
+                    Pickup is currently only available in Noida, Greater Noida, Noida Extension & Indirapuram.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Preferred pickup date</Label>

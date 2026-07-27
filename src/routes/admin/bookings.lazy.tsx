@@ -59,10 +59,23 @@ const STATUS_CONFIG = {
   cancelled: { label: "Cancelled", className: "bg-red-100 text-red-700 border-red-200" },
 };
 
-const SOURCE_CONFIG: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
-  website: { label: "Website", icon: <Globe className="h-3 w-3" />, className: "bg-purple-100 text-purple-700 border-purple-200" },
-  whatsapp: { label: "WhatsApp", icon: <MessageCircle className="h-3 w-3" />, className: "bg-green-100 text-green-700 border-green-200" },
-  admin: { label: "Admin", icon: <Shield className="h-3 w-3" />, className: "bg-orange-100 text-orange-700 border-orange-200" },
+const STATUS_CONFIG: Record<
+  Booking["status"],
+  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+> = {
+  scheduled: { label: "Scheduled", variant: "outline" },
+  in_progress: { label: "In Progress", variant: "secondary" },
+  completed: { label: "Completed", variant: "default" },
+  cancelled: { label: "Cancelled", variant: "destructive" },
+};
+
+const SOURCE_CONFIG: Record<
+  NonNullable<Booking["source"]>,
+  { label: string; icon: typeof Globe }
+> = {
+  website: { label: "Website", icon: Globe },
+  whatsapp: { label: "WhatsApp", icon: MessageCircle },
+  admin: { label: "Admin", icon: Shield },
 };
 
 const FILTERS = ["all", "scheduled", "in_progress", "completed", "cancelled"] as const;
@@ -75,6 +88,7 @@ type AdminBookingForm = {
   phone: string;
   society: string;
   tower: string;
+  pincode: string;
   pickupDate: string;
   materials: string[];
   source: "website" | "whatsapp" | "admin";
@@ -89,6 +103,7 @@ const emptyForm = (): AdminBookingForm => ({
   phone: "",
   society: "",
   tower: "",
+  pincode: "",
   pickupDate: new Date().toISOString().slice(0, 10),
   materials: [],
   source: "whatsapp",
@@ -321,6 +336,7 @@ useEffect(() => {
       phone: booking.phone,
       society: booking.society,
       tower: booking.tower ?? "",
+      pincode: booking.pincode ?? "",
       pickupDate: booking.pickupDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
       materials: booking.materials ?? [],
       source: booking.source ?? "whatsapp",
@@ -338,17 +354,23 @@ useEffect(() => {
       toast.error("Name, Phone, and Society are required");
       return;
     }
+    if (editForm.pincode.trim() && !isPincodeSupported(editForm.pincode.trim())) {
+      toast.error(`Pincode ${editForm.pincode.trim()} is not in supported service area.`);
+      return;
+    }
     if (editForm.materials.length === 0) {
       toast.error("Please select at least one material");
       return;
     }
     setEditing(true);
     try {
+      const cleanPin = editForm.pincode.trim();
       const payload: Record<string, unknown> = {
         fullName: editForm.fullName.trim(),
         phone: editForm.phone.trim(),
         society: editForm.society.trim(),
         tower: editForm.tower.trim() || null,
+        pincode: cleanPin || null,
         pickupDate: editForm.pickupDate,
         materials: editForm.materials,
         source: editForm.source,
@@ -385,17 +407,25 @@ useEffect(() => {
       toast.error("Name, Phone, and Society are required");
       return;
     }
+    if (createForm.pincode.trim() && !isPincodeSupported(createForm.pincode.trim())) {
+      toast.error(`Pickup is currently not available for pincode ${createForm.pincode.trim()}. Supported areas: Noida, Greater Noida, Noida Extension & Indirapuram.`);
+      return;
+    }
     if (createForm.materials.length === 0) {
       toast.error("Please select at least one material");
       return;
     }
     setCreating(true);
     try {
+      const cleanPin = createForm.pincode.trim();
       const payload: Record<string, unknown> = {
         fullName: createForm.fullName.trim(),
         phone: createForm.phone.trim(),
-        society: createForm.society.trim(),
+        society: cleanPin && !createForm.society.includes(cleanPin)
+          ? `${createForm.society.trim()} (PIN: ${cleanPin})`
+          : createForm.society.trim(),
         tower: createForm.tower.trim() || undefined,
+        pincode: cleanPin || undefined,
         pickupDate: createForm.pickupDate,
         materials: createForm.materials,
         source: createForm.source,
@@ -665,6 +695,24 @@ useEffect(() => {
                   value={createForm.tower}
                   onChange={(e) => setCreateForm({ ...createForm, tower: e.target.value })}
                   placeholder="e.g. A, B3, Tower 2"
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="cb-pincode">Pincode *</Label>
+                  {createForm.pincode.length === 6 && (
+                    <span className={`text-[11px] font-medium ${isPincodeSupported(createForm.pincode) ? "text-emerald-600" : "text-red-500"}`}>
+                      {isPincodeSupported(createForm.pincode) ? `✓ Serviceable (${PINCODE_LOCATION_MAP[createForm.pincode] || "Supported Area"})` : "✕ Pickup Not Available"}
+                    </span>
+                  )}
+                </div>
+                <Input
+                  id="cb-pincode"
+                  maxLength={6}
+                  value={createForm.pincode}
+                  onChange={(e) => setCreateForm({ ...createForm, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                  placeholder="e.g. 201306"
                   className="rounded-xl"
                 />
               </div>
@@ -1130,6 +1178,24 @@ useEffect(() => {
                   value={editForm.tower}
                   onChange={(e) => setEditForm({ ...editForm, tower: e.target.value })}
                   placeholder="e.g. A, B3, Tower 2"
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="eb-pincode">Pincode</Label>
+                  {editForm.pincode.length === 6 && (
+                    <span className={`text-[11px] font-medium ${isPincodeSupported(editForm.pincode) ? "text-emerald-600" : "text-red-500"}`}>
+                      {isPincodeSupported(editForm.pincode) ? `✓ Serviceable (${PINCODE_LOCATION_MAP[editForm.pincode] || "Supported Area"})` : "✕ Pickup Not Available"}
+                    </span>
+                  )}
+                </div>
+                <Input
+                  id="eb-pincode"
+                  maxLength={6}
+                  value={editForm.pincode}
+                  onChange={(e) => setEditForm({ ...editForm, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                  placeholder="e.g. 201306"
                   className="rounded-xl"
                 />
               </div>
