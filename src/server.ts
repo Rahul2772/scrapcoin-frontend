@@ -162,6 +162,22 @@ export default {
     if (pathname === "/robots.txt") return robotsTxtResponse();
     if (pathname === "/sitemap.xml") return sitemapXmlResponse();
 
+    // ── API Proxy ─────────────────────────────────────────────────────────────
+    // Forward all /api/* requests directly to the backend (Railway).
+    // This avoids the SSR handler which has no route for API calls and would
+    // hang or crash on PUT/DELETE requests.
+    if (pathname.startsWith("/api/")) {
+      const backendUrl = "https://api.scrapco.in";
+      const url = new URL(request.url);
+      const proxiedUrl = `${backendUrl}${url.pathname}${url.search}`;
+      return fetch(proxiedUrl, {
+        method: request.method,
+        headers: request.headers,
+        body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
+        redirect: "follow",
+      });
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
