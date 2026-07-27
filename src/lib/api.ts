@@ -492,6 +492,12 @@ export async function markAllERPNotificationsRead(token?: string): Promise<{ suc
   });
 }
 
+export async function markERPNotificationRead(id: string, token?: string): Promise<{ success: boolean }> {
+  return authFetch(`${API_BASE}/api/notifications/${id}/read`, token, {
+    method: "PATCH",
+  });
+}
+
 export async function clearAllERPNotifications(token?: string): Promise<{ success: boolean }> {
   return authFetch(`${API_BASE}/api/notifications`, token, {
     method: "DELETE",

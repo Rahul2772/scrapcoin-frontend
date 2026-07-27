@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   fetchERPNotifications,
   markAllERPNotificationsRead,
+  markERPNotificationRead,
   clearAllERPNotifications,
   type ERPNotification,
 } from "@/lib/api";
@@ -12,6 +13,7 @@ import { toast } from "sonner";
 import {
   Bell,
   CheckCheck,
+  Check,
   Trash2,
   RefreshCw,
   Clock,
@@ -61,6 +63,17 @@ function ERPNotificationsPage() {
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to mark notifications as read");
+    }
+  }
+
+  async function handleMarkSingleRead(id: string) {
+    if (!session?.access_token) return;
+    // Optimistic local update
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    try {
+      await markERPNotificationRead(id, session.access_token);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to mark notification as read");
     }
   }
 
@@ -115,7 +128,6 @@ function ERPNotificationsPage() {
     }
   };
 
-
   return (
     <div className="space-y-6">
       {/* Top action header */}
@@ -157,7 +169,7 @@ function ERPNotificationsPage() {
               variant="outline"
               size="sm"
               onClick={handleMarkAllRead}
-              className="rounded-full text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200 cursor-pointer"
+              className="rounded-full text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200 cursor-pointer font-medium"
             >
               <CheckCheck className="h-3.5 w-3.5" />
               Mark All Read
@@ -202,9 +214,14 @@ function ERPNotificationsPage() {
           {filteredNotifications.map((n) => (
             <div
               key={n.id}
-              className={`flex items-start gap-4 p-4 rounded-xl border border-border/60 transition-all hover:shadow-sm ${getEventColor(
-                n.type
-              )} ${!n.is_read ? "bg-background shadow-[inset_3px_0_0_#f5a623]" : "bg-card"}`}
+              onClick={() => {
+                if (!n.is_read) handleMarkSingleRead(n.id);
+              }}
+              className={`flex items-start gap-4 p-4 rounded-xl border border-border/60 transition-all hover:shadow-sm ${
+                !n.is_read ? "cursor-pointer" : ""
+              } ${getEventColor(n.type)} ${
+                !n.is_read ? "bg-background shadow-[inset_3px_0_0_#f5a623]" : "bg-card"
+              }`}
             >
               {/* Event Icon badge */}
               <div className="rounded-lg bg-background p-2 border border-border/40 shadow-sm shrink-0">
@@ -231,10 +248,29 @@ function ERPNotificationsPage() {
                 </p>
               </div>
 
-              {/* Read indicator */}
-              {!n.is_read && (
-                <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0 mt-2" title="Unread event" />
-              )}
+              {/* Read indicator & button */}
+              <div className="flex items-center gap-2 shrink-0 self-center">
+                {!n.is_read ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMarkSingleRead(n.id);
+                    }}
+                    className="h-7 text-[11px] px-2.5 rounded-lg border-amber-300 bg-amber-50/50 text-amber-700 hover:bg-amber-100 gap-1 cursor-pointer"
+                    title="Click to mark as read"
+                  >
+                    <Check className="h-3 w-3" />
+                    Mark Read
+                  </Button>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
+                    <CheckCheck className="h-3.5 w-3.5 text-muted-foreground/40" />
+                    Read
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>
