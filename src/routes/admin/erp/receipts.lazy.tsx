@@ -5,6 +5,7 @@ import {
   fetchERPPurchaseReceipts,
   fetchERPMaterials,
   fetchERPCustomers,
+  createERPCustomer,
   createERPPurchaseReceipt,
   updateERPPurchaseReceipt,
   deleteERPPurchaseReceipt,
@@ -27,6 +28,8 @@ import {
   RotateCw,
   Scale,
   Edit2,
+  UserPlus,
+  Check,
 } from "lucide-react";
 import {
   Dialog,
@@ -97,6 +100,53 @@ function ERPReceiptsPage() {
   const [date, setDate] = useState("");
   const [editingReceipt, setEditingReceipt] = useState<GroupedERPPurchaseReceipt | null>(null);
 
+  // Inline Runtime Customer creation states
+  const [showNewCustForm, setShowNewCustForm] = useState(false);
+  const [newCustName, setNewCustName] = useState("");
+  const [newCustPhone, setNewCustPhone] = useState("");
+  const [newCustAddress, setNewCustAddress] = useState("");
+  const [creatingCust, setCreatingCust] = useState(false);
+
+  function resetNewCustForm() {
+    setShowNewCustForm(false);
+    setNewCustName("");
+    setNewCustPhone("");
+    setNewCustAddress("");
+  }
+
+  async function handleQuickCreateCustomer(): Promise<string | null> {
+    if (!newCustName.trim()) {
+      toast.error("Customer full name is required");
+      return null;
+    }
+    setCreatingCust(true);
+    try {
+      const res = await createERPCustomer(
+        {
+          name: newCustName.trim(),
+          phone: newCustPhone.trim() || null,
+          address: newCustAddress.trim() || null,
+        },
+        session?.access_token
+      );
+      if (res.success && res.customer) {
+        setCustomers((prev) => [res.customer, ...prev]);
+        setCustomerId(res.customer.id);
+        resetNewCustForm();
+        toast.success(`Customer '${res.customer.name}' registered & selected!`);
+        return res.customer.id;
+      } else {
+        toast.error("Failed to create customer");
+        return null;
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to register customer");
+      return null;
+    } finally {
+      setCreatingCust(false);
+    }
+  }
+
   type ReceiptItem = {
     materialId: string;
     weight: number | "";
@@ -157,6 +207,7 @@ function ERPReceiptsPage() {
   function openCreate() {
     setEditingReceipt(null);
     setCustomerId("");
+    resetNewCustForm();
     setItems([{ materialId: "", weight: "", price: "" }]);
     setPayMethod("cash");
     setNotes("");
@@ -167,6 +218,7 @@ function ERPReceiptsPage() {
   function openEdit(r: GroupedERPPurchaseReceipt) {
     setEditingReceipt(r);
     setCustomerId(r.customer_id || "");
+    resetNewCustForm();
     setPayMethod(r.payment_method || "cash");
     setNotes(r.notes || "");
     setDate(new Date(r.created_at).toISOString().split("T")[0]);
@@ -204,8 +256,22 @@ function ERPReceiptsPage() {
 
     setSubmitting(true);
     try {
+      let finalCustomerId = customerId;
+      if (customerId === "__NEW__" || showNewCustForm) {
+        if (!newCustName.trim()) {
+          setSubmitting(false);
+          return toast.error("Please enter the new Household Customer Name");
+        }
+        const createdId = await handleQuickCreateCustomer();
+        if (!createdId) {
+          setSubmitting(false);
+          return;
+        }
+        finalCustomerId = createdId;
+      }
+
       const payload = {
-        customer_id: customerId || null,
+        customer_id: finalCustomerId || null,
         payment_method: payMethod,
         notes: notes.trim() || null,
         created_at: editingReceipt && date === new Date(editingReceipt.created_at).toISOString().split("T")[0]
@@ -240,6 +306,7 @@ function ERPReceiptsPage() {
       setSubmitting(false);
     }
   }
+
 
 
   async function handleDelete(id: string) {
@@ -407,22 +474,106 @@ function ERPReceiptsPage() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="rec-cust">Household Customer (Optional)</Label>
-                <select
-                  id="rec-cust"
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">Walk-in Customer (Unregistered)</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.phone || "No phone"})
-                    </option>
-                  ))}
-                </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5 col-span-1 md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="rec-cust">Household Customer (Optional)</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!showNewCustForm) {
+                        setShowNewCustForm(true);
+                        setCustomerId("__NEW__");
+                      } else {
+                        resetNewCustForm();
+                        setCustomerId("");
+                      }
+                    }}
+                    className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <UserPlus className="h-3 w-3" />
+                    {showNewCustForm ? "Select Existing Customer" : "+ Add New Customer"}
+                  </button>
+                </div>
+
+                {!showNewCustForm ? (
+                  <select
+                    id="rec-cust"
+                    value={customerId}
+                    onChange={(e) => {
+                      if (e.target.value === "__NEW__") {
+                        setShowNewCustForm(true);
+                        setCustomerId("__NEW__");
+                      } else {
+                        setCustomerId(e.target.value);
+                      }
+                    }}
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">Walk-in Customer (Unregistered)</option>
+                    <option value="__NEW__">+ Create New Household Customer...</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.phone || "No phone"})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <UserPlus className="h-3.5 w-3.5 text-primary" />
+                        Quick Add Household Customer
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetNewCustForm();
+                          setCustomerId("");
+                        }}
+                        className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Input
+                        placeholder="Customer Full Name *"
+                        value={newCustName}
+                        onChange={(e) => setNewCustName(e.target.value)}
+                        className="rounded-lg text-xs bg-background h-8"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Phone Number (Optional)"
+                        value={newCustPhone}
+                        onChange={(e) => setNewCustPhone(e.target.value)}
+                        className="rounded-lg text-xs bg-background h-8"
+                      />
+                      <Input
+                        placeholder="Address / Area (Optional)"
+                        value={newCustAddress}
+                        onChange={(e) => setNewCustAddress(e.target.value)}
+                        className="rounded-lg text-xs bg-background h-8"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+                      <span>Will auto-register on receipt save</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={creatingCust || !newCustName.trim()}
+                        onClick={handleQuickCreateCustomer}
+                        className="h-6 text-[10px] px-2.5 rounded-lg cursor-pointer gap-1"
+                      >
+                        <Check className="h-3 w-3" />
+                        {creatingCust ? "Saving..." : "Save & Select"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
