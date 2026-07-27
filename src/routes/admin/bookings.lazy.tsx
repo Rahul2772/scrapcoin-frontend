@@ -197,21 +197,32 @@ useEffect(() => {
     });
   }
 
-  async function updateStatus(id: string, status: string) {
+  // Status update state
+  const [statusSelectValue, setStatusSelectValue] = useState<string>("");
+  const [statusCommentInput, setStatusCommentInput] = useState<string>("");
+
+  async function updateStatus(id: string, status: string, statusComments?: string) {
     setUpdating(true);
     try {
+      const payload: Record<string, unknown> = { status };
+      if (statusComments !== undefined) {
+        payload.statusComments = statusComments;
+      }
+
       const res = await fetch(`${API_BASE}/api/bookings/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session!.access_token}`,
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to update");
       const updated: Booking = await res.json();
       setBookings((prev) => prev.map((b) => (b.id === id ? updated : b)));
       setSelected(updated);
+      setStatusSelectValue(updated.status);
+      setStatusCommentInput(updated.statusComments || "");
       toast.success("Status updated");
       if (status === "scheduled" || status === "completed") {
         toast.info("Customer automatically added/updated in ERP Customers", { duration: 4000 });
@@ -518,7 +529,8 @@ useEffect(() => {
                         onClick={() => {
                           setSelected(b);
                           setCrmEdit(null);
-                          setShowWeightForm(false);
+                          setStatusSelectValue(b.status);
+                          setStatusCommentInput(b.statusComments || "");
                         }}
                         className="cursor-pointer hover:bg-muted/30 transition-colors"
                       >
@@ -956,12 +968,12 @@ useEffect(() => {
                   )}
                 </div>
 
-                <div className="pt-4 border-t border-border">
-                  <p className="text-muted-foreground mb-2">Update Status</p>
+                <div className="pt-4 border-t border-border space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Update Status</p>
                   <Select
-                    value={selected.status}
+                    value={statusSelectValue || selected.status}
                     onValueChange={(val) => {
-                      updateStatus(selected.id, val);
+                      setStatusSelectValue(val);
                     }}
                     disabled={updating || (profile?.role === "champion" && selected.status === "completed")}
                   >
@@ -975,6 +987,33 @@ useEffect(() => {
                       <SelectItem value="cancelled">Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="status-comment" className="text-xs text-muted-foreground">
+                      Status Comment / Remark (Optional)
+                    </Label>
+                    <Textarea
+                      id="status-comment"
+                      value={statusCommentInput}
+                      onChange={(e) => setStatusCommentInput(e.target.value)}
+                      placeholder="e.g. Rescheduled on customer request / Completed pickup..."
+                      className="rounded-xl resize-none text-xs"
+                      rows={2}
+                    />
+                  </div>
+
+                  <Button
+                    size="sm"
+                    disabled={updating || (profile?.role === "champion" && selected.status === "completed")}
+                    onClick={() => {
+                      const newStatus = statusSelectValue || selected.status;
+                      updateStatus(selected.id, newStatus, statusCommentInput.trim() || undefined);
+                    }}
+                    className="w-full rounded-xl text-xs cursor-pointer gap-1.5"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    {updating ? "Saving..." : "Save Status & Comment"}
+                  </Button>
                 </div>
 
                 {profile?.role === "admin" ? (
