@@ -72,6 +72,7 @@ function ERPCustomersPage() {
   const [idNumber, setIdNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [lastReceiptDate, setLastReceiptDate] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadCustomers();
@@ -167,6 +168,7 @@ function ERPCustomersPage() {
       last_receipt_date: lastReceiptDate ? new Date(lastReceiptDate).toISOString() : null,
     };
 
+    setSaving(true);
     try {
       if (editingCustomer) {
         const res = await updateERPCustomer(editingCustomer.id, payload, session?.access_token);
@@ -174,6 +176,8 @@ function ERPCustomersPage() {
           toast.success("Customer profile updated");
           setDialogOpen(false);
           loadCustomers();
+        } else {
+          toast.error((res as any).message || "Failed to update customer — please try again");
         }
       } else {
         const res = await createERPCustomer(payload, session?.access_token);
@@ -181,10 +185,14 @@ function ERPCustomersPage() {
           toast.success("Customer registered successfully");
           setDialogOpen(false);
           loadCustomers();
+        } else {
+          toast.error((res as any).message || "Failed to create customer — please try again");
         }
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to save customer profile");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -514,8 +522,8 @@ function ERPCustomersPage() {
               <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)} className="rounded-xl cursor-pointer">
                 Cancel
               </Button>
-              <Button type="submit" className="rounded-xl cursor-pointer">
-                Save Customer
+              <Button type="submit" disabled={saving} className="rounded-xl cursor-pointer">
+                {saving ? "Saving..." : "Save Customer"}
               </Button>
             </DialogFooter>
           </form>

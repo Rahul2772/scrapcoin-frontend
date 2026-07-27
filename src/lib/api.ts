@@ -26,8 +26,18 @@ export type LivePickup = {
 
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const body = await response.text();
-    const message = body || `Request failed (${response.status})`;
+    let message = `Request failed (${response.status})`;
+    try {
+      const body = await response.text();
+      if (body) {
+        try {
+          const parsed = JSON.parse(body);
+          message = parsed.message || parsed.error || body;
+        } catch {
+          message = body;
+        }
+      }
+    } catch {}
     throw new Error(message);
   }
   return response.json() as Promise<T>;
