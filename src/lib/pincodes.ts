@@ -34,8 +34,14 @@ export const PINCODE_LOCATION_MAP: Record<string, string> = {
   "201014": "Indirapuram (Ahinsa, Niti, Gyan Khand, Shipra Sun City)",
 };
 
-export function isPincodeSupported(pincode: string): boolean {
-  if (!pincode) return false;
-  const clean = pincode.trim();
-  return (SUPPORTED_PINCODES as readonly string[]).includes(clean);
+export function isPincodeSupported(pincode: unknown): boolean {
+  if (pincode === null || pincode === undefined) return false;
+  const str = String(pincode).trim();
+  return (SUPPORTED_PINCODES as readonly string[]).includes(str);
+}
+
+export function getPincodeLocation(pincode: unknown): string {
+  if (pincode === null || pincode === undefined) return "";
+  const str = String(pincode).trim();
+  return PINCODE_LOCATION_MAP[str] || "";
 }

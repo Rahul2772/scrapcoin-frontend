@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
 import { Trash2, Plus, MessageCircle, Globe, Shield, Save, UserCheck, Edit2 } from "lucide-react";
+import { isPincodeSupported, getPincodeLocation } from "@/lib/pincodes";
 
 export const Route = createLazyFileRoute("/admin/bookings")({
   component: AdminBookings,
@@ -706,17 +707,17 @@ useEffect(() => {
               <div className="space-y-1.5 sm:col-span-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="cb-pincode">Pincode *</Label>
-                  {createForm.pincode.length === 6 && (
+                  {(createForm.pincode || "").length === 6 && (
                     <span className={`text-[11px] font-medium ${isPincodeSupported(createForm.pincode) ? "text-emerald-600" : "text-red-500"}`}>
-                      {isPincodeSupported(createForm.pincode) ? `✓ Serviceable (${PINCODE_LOCATION_MAP[createForm.pincode] || "Supported Area"})` : "✕ Pickup Not Available"}
+                      {isPincodeSupported(createForm.pincode) ? `✓ Serviceable (${getPincodeLocation(createForm.pincode) || "Supported Area"})` : "✕ Pickup Not Available"}
                     </span>
                   )}
                 </div>
                 <Input
                   id="cb-pincode"
                   maxLength={6}
-                  value={createForm.pincode}
-                  onChange={(e) => setCreateForm({ ...createForm, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                  value={createForm.pincode || ""}
+                  onChange={(e) => setCreateForm({ ...createForm, pincode: (e.target?.value || "").replace(/\D/g, "").slice(0, 6) })}
                   placeholder="e.g. 201306"
                   className="rounded-xl"
                 />
@@ -1189,17 +1190,17 @@ useEffect(() => {
               <div className="space-y-1.5 sm:col-span-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="eb-pincode">Pincode</Label>
-                  {editForm.pincode.length === 6 && (
+                  {(editForm.pincode || "").length === 6 && (
                     <span className={`text-[11px] font-medium ${isPincodeSupported(editForm.pincode) ? "text-emerald-600" : "text-red-500"}`}>
-                      {isPincodeSupported(editForm.pincode) ? `✓ Serviceable (${PINCODE_LOCATION_MAP[editForm.pincode] || "Supported Area"})` : "✕ Pickup Not Available"}
+                      {isPincodeSupported(editForm.pincode) ? `✓ Serviceable (${getPincodeLocation(editForm.pincode) || "Supported Area"})` : "✕ Pickup Not Available"}
                     </span>
                   )}
                 </div>
                 <Input
                   id="eb-pincode"
                   maxLength={6}
-                  value={editForm.pincode}
-                  onChange={(e) => setEditForm({ ...editForm, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                  value={editForm.pincode || ""}
+                  onChange={(e) => setEditForm({ ...editForm, pincode: (e.target?.value || "").replace(/\D/g, "").slice(0, 6) })}
                   placeholder="e.g. 201306"
                   className="rounded-xl"
                 />

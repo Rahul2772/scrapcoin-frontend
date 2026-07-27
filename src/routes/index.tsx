@@ -37,7 +37,7 @@ import { WhatsAppFAB, WhatsAppLink } from "@/components/whatsapp-button";
 import { createBooking, fetchCircularImpact, type CircularImpact } from "@/lib/api";
 import { NavAuth } from "./__root";
 import { Header } from "@/components/Header";
-import { isPincodeSupported, PINCODE_LOCATION_MAP } from "@/lib/pincodes";
+import { isPincodeSupported, getPincodeLocation } from "@/lib/pincodes";
 import * as Sentry from "@sentry/react";
 
 export const Route = createFileRoute("/")({
@@ -526,7 +526,7 @@ function Index() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="pincode">Pincode *</Label>
-                  {pincodeInput.length === 6 && (
+                  {(pincodeInput || "").length === 6 && (
                     <span className={cn(
                       "text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1",
                       isPincodeSupported(pincodeInput) ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-red-500/10 text-red-600 border border-red-500/20"
@@ -542,21 +542,21 @@ function Index() {
                   inputMode="numeric"
                   maxLength={6}
                   placeholder="e.g. 201306"
-                  value={pincodeInput}
-                  onChange={(e) => setPincodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  value={pincodeInput || ""}
+                  onChange={(e) => setPincodeInput((e.target?.value || "").replace(/\D/g, "").slice(0, 6))}
                   required
                   className={cn(
                     "rounded-xl transition-all",
-                    pincodeInput.length === 6 && !isPincodeSupported(pincodeInput) && "border-red-500 focus-visible:ring-red-500 bg-red-50/20",
-                    pincodeInput.length === 6 && isPincodeSupported(pincodeInput) && "border-emerald-500 focus-visible:ring-emerald-500 bg-emerald-50/20"
+                    (pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && "border-red-500 focus-visible:ring-red-500 bg-red-50/20",
+                    (pincodeInput || "").length === 6 && isPincodeSupported(pincodeInput) && "border-emerald-500 focus-visible:ring-emerald-500 bg-emerald-50/20"
                   )}
                 />
-                {pincodeInput.length === 6 && isPincodeSupported(pincodeInput) && (
+                {(pincodeInput || "").length === 6 && isPincodeSupported(pincodeInput) && (
                   <p className="text-xs text-emerald-600 font-medium">
-                    📍 Area: {PINCODE_LOCATION_MAP[pincodeInput] || "Serviceable Area"}
+                    📍 Area: {getPincodeLocation(pincodeInput) || "Serviceable Area"}
                   </p>
                 )}
-                {pincodeInput.length === 6 && !isPincodeSupported(pincodeInput) && (
+                {(pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && (
                   <p className="text-xs text-red-500 font-medium">
                     Pickup is currently only available in Noida, Greater Noida, Noida Extension & Indirapuram.
                   </p>
