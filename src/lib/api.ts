@@ -110,6 +110,8 @@ export type ERPCustomer = {
   id_number?: string | null;
   total_visits?: number;
   total_paid?: number;
+  visit_count?: number;
+  lifetime_paid?: number;
   last_receipt_date?: string | null;
   days_since_last_receipt?: number | null;
   is_30_day_alert?: boolean;
@@ -281,8 +283,9 @@ export async function fetchERPDashboard(token?: string): Promise<{ success: bool
 }
 
 export async function fetchERPMaterials(token?: string, category?: string): Promise<{ success: boolean; count: number; materials: ERPMaterial[] }> {
-  const url = category ? `${API_BASE}/api/erp/materials?category=${category}` : `${API_BASE}/api/erp/materials`;
-  return authFetch(url, token);
+  const ts = Date.now();
+  const url = category ? `${API_BASE}/api/erp/materials?category=${category}&_t=${ts}` : `${API_BASE}/api/erp/materials?_t=${ts}`;
+  return authFetch(url, token, { cache: "no-store" });
 }
 
 export async function fetchERPMaterialPriceHistory(materialId: string, token?: string): Promise<{ success: boolean; history: any[] }> {
@@ -310,8 +313,9 @@ export async function deleteERPMaterial(materialId: string, token?: string): Pro
 }
 
 export async function fetchERPSuppliers(token?: string, search?: string): Promise<{ success: boolean; count: number; suppliers: ERPSupplier[] }> {
-  const url = search ? `${API_BASE}/api/erp/suppliers?search=${encodeURIComponent(search)}` : `${API_BASE}/api/erp/suppliers`;
-  return authFetch(url, token);
+  const ts = Date.now();
+  const url = search ? `${API_BASE}/api/erp/suppliers?search=${encodeURIComponent(search)}&_t=${ts}` : `${API_BASE}/api/erp/suppliers?_t=${ts}`;
+  return authFetch(url, token, { cache: "no-store" });
 }
 
 export async function fetchERPSupplierDetail(supplierId: string, token?: string): Promise<{ success: boolean; supplier: ERPSupplier; recent_transactions: any[] }> {
@@ -339,8 +343,11 @@ export async function deleteERPSupplier(supplierId: string, token?: string): Pro
 }
 
 export async function fetchERPCustomers(token?: string, search?: string): Promise<{ success: boolean; customers: ERPCustomer[] }> {
-  const url = search ? `${API_BASE}/api/erp/customers?search=${encodeURIComponent(search)}` : `${API_BASE}/api/erp/customers`;
-  return authFetch(url, token);
+  const ts = Date.now();
+  const url = search 
+    ? `${API_BASE}/api/erp/customers?search=${encodeURIComponent(search)}&_t=${ts}` 
+    : `${API_BASE}/api/erp/customers?_t=${ts}`;
+  return authFetch(url, token, { cache: "no-store" });
 }
 
 export async function fetchERPCustomerDetail(customerId: string, token?: string): Promise<{ success: boolean; customer: ERPCustomer; receipts: any[] }> {
@@ -374,8 +381,9 @@ export async function triggerCustomer30DayNotification(customerId: string, token
 }
 
 export async function fetchERPTransactions(token?: string, params: Record<string, string> = {}): Promise<{ success: boolean; count: number; page: number; transactions: ERPTransaction[] }> {
-  const q = new URLSearchParams(params).toString();
-  return authFetch(`${API_BASE}/api/erp/transactions?${q}`, token);
+  const ts = Date.now();
+  const q = new URLSearchParams({ ...params, _t: ts.toString() }).toString();
+  return authFetch(`${API_BASE}/api/erp/transactions?${q}`, token, { cache: "no-store" });
 }
 
 export async function fetchERPTransactionDetail(txnId: string, token?: string): Promise<{ success: boolean; transaction: ERPTransaction }> {
@@ -403,8 +411,9 @@ export async function deleteERPTransaction(txnId: string, token?: string): Promi
 }
 
 export async function fetchERPInvoices(token?: string, params: Record<string, string> = {}): Promise<{ success: boolean; count: number; summary: any; invoices: ERPInvoice[] }> {
-  const q = new URLSearchParams(params).toString();
-  return authFetch(`${API_BASE}/api/erp/invoices?${q}`, token);
+  const ts = Date.now();
+  const q = new URLSearchParams({ ...params, _t: ts.toString() }).toString();
+  return authFetch(`${API_BASE}/api/erp/invoices?${q}`, token, { cache: "no-store" });
 }
 
 export async function payERPInvoice(invoiceId: string, paymentMethod: string, notes?: string, token?: string): Promise<{ success: boolean; message: string; invoice: ERPInvoice }> {
