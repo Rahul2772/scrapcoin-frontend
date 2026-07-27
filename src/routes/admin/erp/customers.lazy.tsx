@@ -175,7 +175,14 @@ function ERPCustomersPage() {
         if (res.success) {
           toast.success("Customer profile updated");
           setDialogOpen(false);
-          loadCustomers();
+          // Directly update local state with the returned customer data — no re-fetch needed
+          setCustomers((prev) =>
+            prev.map((c) =>
+              c.id === editingCustomer.id
+                ? { ...c, ...res.customer, name: res.customer?.name ?? payload.name ?? c.name }
+                : c
+            )
+          );
         } else {
           toast.error((res as any).message || "Failed to update customer — please try again");
         }
