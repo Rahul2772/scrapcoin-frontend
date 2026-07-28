@@ -1,1 +1,0 @@
-import{r as t,N as r,ci as a,a8 as i,aM as l}from"./index-c1dVGhv2.js";const d=l("text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"),n=t.forwardRef(({className:s,...e},o)=>r.jsx(a,{ref:o,className:i(d(),s),...e}));n.displayName=a.displayName;export{n as L};
