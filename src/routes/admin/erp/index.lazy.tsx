@@ -1,6 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { fetchERPDashboard, type ERPDashboardData } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -45,23 +46,58 @@ function ERPDashboard() {
   const { session } = useAuth();
   const [data, setData] = useState<ERPDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  async function loadDashboard(token: string, showLoading = false) {
+    if (showLoading) setLoading(true);
+    try {
+      const res = await fetchERPDashboard(token);
+      if (res.success) setData(res.dashboard);
+    } catch (err) {
+      console.error("[ERP Dashboard] Refresh error:", err);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }
+
+  // Initial load
   useEffect(() => {
     if (!session?.access_token) return;
-    async function load() {
-      try {
-        const res = await fetchERPDashboard(session?.access_token);
-        if (res.success) {
-          setData(res.dashboard);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    loadDashboard(session.access_token, true);
   }, [session]);
+
+  // Supabase Realtime — auto-refresh on data changes
+  useEffect(() => {
+    if (!session?.access_token) return;
+    const token = session.access_token;
+
+    const channel = supabase
+      .channel("erp-dashboard-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "erp_transactions" }, () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => loadDashboard(token), 1500);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "erp_purchase_receipts" }, () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => loadDashboard(token), 1500);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => loadDashboard(token), 1500);
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") setLiveStatus("live");
+        else if (status === "CLOSED" || status === "CHANNEL_ERROR") setLiveStatus("offline");
+        else setLiveStatus("connecting");
+      });
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
 
   if (loading || !data) {
     return (
@@ -83,6 +119,34 @@ function ERPDashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Live status indicator */}
+      <div className="flex items-center justify-end">
+        {liveStatus === "live" && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            LIVE
+          </span>
+        )}
+        {liveStatus === "connecting" && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-500">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+            </span>
+            Connecting…
+          </span>
+        )}
+        {liveStatus === "offline" && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+            <span className="inline-flex rounded-full h-2 w-2 bg-gray-400" />
+            Offline
+          </span>
+        )}
+      </div>
+
       {/* Stat Cards — Sell Revenue · Buy Cost · Weight · Scale Tickets · Gross P&L */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
 
