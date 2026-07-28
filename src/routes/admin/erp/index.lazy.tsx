@@ -9,7 +9,6 @@ import {
   TrendingDown,
   AlertTriangle,
   FileText,
-  DollarSign,
   Scale,
   Calendar,
   ArrowUpRight,
@@ -84,26 +83,42 @@ function ERPDashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* 4 Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stat Cards — Sell Revenue · Buy Cost · Weight · Scale Tickets · Gross P&L */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+
+        {/* 1 — B2B Sell Revenue */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-semibold uppercase tracking-wider">Revenue (This Month)</span>
-            <DollarSign className="h-4.5 w-4.5 text-primary" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Sell Revenue</span>
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
           </div>
           <p className="mt-2 text-2xl font-bold text-foreground">
             ₹{revenue.revenue_this_month.toLocaleString("en-IN")}
           </p>
-          <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-600">
-            <TrendingUp className="h-3 w-3" />
-            <span>Active transactions</span>
+          <div className="mt-1 text-[10px] text-emerald-600">
+            B2B sales to recyclers this month
           </div>
         </div>
 
+        {/* 2 — B2C Buy Cost */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Collected</span>
-            <Scale className="h-4.5 w-4.5 text-secondary" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Buy Cost</span>
+            <TrendingDown className="h-4 w-4 text-rose-500" />
+          </div>
+          <p className="mt-2 text-2xl font-bold text-foreground">
+            ₹{(revenue.buy_cost_this_month ?? 0).toLocaleString("en-IN")}
+          </p>
+          <div className="mt-1 text-[10px] text-rose-500">
+            Paid to household customers this month
+          </div>
+        </div>
+
+        {/* 3 — Weight Collected */}
+        <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-wider">Weight Collected</span>
+            <Scale className="h-4 w-4 text-blue-500" />
           </div>
           <p className="mt-2 text-2xl font-bold text-foreground">
             {revenue.weight_this_month.toLocaleString("en-IN")} kg
@@ -114,35 +129,44 @@ function ERPDashboard() {
           </div>
         </div>
 
+        {/* 4 — B2B Scale Ticket Count */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-semibold uppercase tracking-wider">Purchase Count</span>
-            <FileText className="h-4.5 w-4.5 text-amber-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Scale Tickets</span>
+            <FileText className="h-4 w-4 text-amber-500" />
           </div>
           <p className="mt-2 text-2xl font-bold text-foreground">
             {revenue.txn_count_this_month}
           </p>
-          <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-            <span>B2C receipts this month</span>
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            B2B transactions this month
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+        {/* 5 — Gross Profit / Loss */}
+        <div className={`rounded-2xl border p-5 shadow-sm ${
+          revenue.profit_loss >= 0
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : "border-red-500/30 bg-red-500/5"
+        }`}>
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-semibold uppercase tracking-wider">Profit & Loss</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Gross P&L</span>
             {revenue.profit_loss >= 0
-              ? <ArrowUpRight className="h-4.5 w-4.5 text-emerald-500" />
-              : <ArrowDownRight className="h-4.5 w-4.5 text-red-500" />}
+              ? <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+              : <ArrowDownRight className="h-4 w-4 text-red-500" />}
           </div>
           <p className={`mt-2 text-2xl font-bold ${
             revenue.profit_loss >= 0 ? "text-emerald-600" : "text-red-600"
           }`}>
             {revenue.profit_loss >= 0 ? "+" : "-"}₹{Math.abs(revenue.profit_loss).toLocaleString("en-IN")}
           </p>
-          <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-            <span>Sell ₹{revenue.revenue_this_month.toLocaleString("en-IN")} − COGS (sold stock only)</span>
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            {revenue.revenue_this_month > 0
+              ? `Margin: ${((revenue.profit_loss / revenue.revenue_this_month) * 100).toFixed(1)}% · Sell − COGS`
+              : "Sell revenue − cost of goods sold"}
           </div>
         </div>
+
       </div>
 
       {/* Charts section */}
