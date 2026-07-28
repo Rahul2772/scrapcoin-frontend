@@ -1,1 +1,0 @@
-import{r as t,N as r,bw as a,a7 as l,aF as d}from"./index-FyxbrdRo.js";const i=d("text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"),n=t.forwardRef(({className:s,...e},o)=>r.jsx(a,{ref:o,className:l(i(),s),...e}));n.displayName=a.displayName;export{n as L};
