@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Footer } from "@/components/Footer";
 import { format } from "date-fns";
 import {
   CalendarIcon,
