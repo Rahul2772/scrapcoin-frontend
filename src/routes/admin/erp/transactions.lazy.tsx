@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { groupTransactions, type GroupedERPTransaction } from "@/lib/utils";
+import { exportTransactionsCsv } from "@/lib/exportCsv";
 
 export const Route = createLazyFileRoute("/admin/erp/transactions")({
   component: ERPTransactionsPage,
@@ -324,6 +325,16 @@ function ERPTransactionsPage() {
             className="rounded-xl cursor-pointer"
           >
             <RotateCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportTransactionsCsv(transactions)}
+            disabled={loading || transactions.length === 0}
+            className="rounded-xl cursor-pointer gap-1.5"
+          >
+            <Download className="h-4 w-4" /> Export CSV
           </Button>
 
           <Button size="sm" onClick={openCreate} className="rounded-xl gap-1.5 cursor-pointer">

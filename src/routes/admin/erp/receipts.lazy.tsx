@@ -14,6 +14,7 @@ import {
   type ERPCustomer,
 } from "@/lib/api";
 import { groupReceipts, type GroupedERPPurchaseReceipt } from "@/lib/utils";
+import { exportReceiptsCsv } from "@/lib/exportCsv";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +31,7 @@ import {
   Edit2,
   UserPlus,
   Check,
+  Download,
 } from "lucide-react";
 import {
   Dialog,
@@ -356,6 +358,16 @@ function ERPReceiptsPage() {
             className="rounded-xl cursor-pointer"
           >
             <RotateCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportReceiptsCsv(filtered)}
+            disabled={loading || filtered.length === 0}
+            className="rounded-xl cursor-pointer gap-1.5"
+          >
+            <Download className="h-4 w-4" /> Export CSV
           </Button>
 
           <Button size="sm" onClick={openCreate} className="rounded-xl gap-1.5 cursor-pointer">
