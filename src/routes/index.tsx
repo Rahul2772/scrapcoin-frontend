@@ -333,11 +333,13 @@ function Index() {
               recycling done the right way.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <a href="#booking">
-                <Button size="lg" className="rounded-full px-7 shadow-lg cursor-pointer">
-                  Schedule a Pickup
-                </Button>
-              </a>
+              <Button
+                size="lg"
+                className="rounded-full px-7 shadow-lg cursor-pointer"
+                onClick={() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                Schedule a Pickup
+              </Button>
               <Link to="/rates">
                 <Button size="lg" variant="outline" className="rounded-full px-6 cursor-pointer">
                   Check Scrap Rates

@@ -49,11 +49,21 @@ export function Header() {
           {/* Desktop right actions */}
           <div className="hidden md:flex items-center gap-3">
             <Link to="/" hash="booking">
-              <Button size="sm" className="rounded-full shadow-sm cursor-pointer">
+              <Button
+                size="sm"
+                className="rounded-full shadow-sm cursor-pointer"
+                onClick={(e) => {
+                  if (window.location.pathname === "/") {
+                    e.preventDefault();
+                    document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+              >
                 Schedule a Pickup
               </Button>
             </Link>
             <NavAuth />
+
           </div>
 
           {/* Mobile: auth icon + hamburger */}
@@ -85,8 +95,18 @@ export function Header() {
               </Link>
             ))}
             <div className="mt-2 pt-2 border-t border-border/40">
-              <Link to="/" hash="booking" onClick={() => setMobileOpen(false)}>
-                <Button size="sm" className="w-full rounded-full shadow-sm cursor-pointer">
+              <Link to="/" hash="booking">
+                <Button
+                  size="sm"
+                  className="w-full rounded-full shadow-sm cursor-pointer"
+                  onClick={(e) => {
+                    setMobileOpen(false);
+                    if (window.location.pathname === "/") {
+                      e.preventDefault();
+                      document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }}
+                >
                   Schedule a Pickup
                 </Button>
               </Link>
