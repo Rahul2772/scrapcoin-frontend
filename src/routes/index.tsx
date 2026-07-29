@@ -57,6 +57,16 @@ export const Route = createFileRoute("/")({
 
 const MATERIALS = ["Paper / Cardboard", "Plastics", "Metals", "E-Waste", "Others"] as const;
 
+// Per-kg rate card for the scrap value estimator (match with backend categories)
+const ESTIMATOR_ITEMS = [
+  { id: "paper",   label: "Paper & Cardboard", emoji: "📰", rateMin: 8,  rateMax: 14,  unit: "kg", bookingMaterial: "Paper / Cardboard" },
+  { id: "plastic", label: "Plastics",           emoji: "🧴", rateMin: 6,  rateMax: 12,  unit: "kg", bookingMaterial: "Plastics" },
+  { id: "metal",   label: "Metals",             emoji: "🔩", rateMin: 30, rateMax: 55,  unit: "kg", bookingMaterial: "Metals" },
+  { id: "ewaste",  label: "E-Waste",            emoji: "💻", rateMin: 50, rateMax: 150, unit: "kg", bookingMaterial: "E-Waste" },
+] as const;
+
+type EstimatorId = typeof ESTIMATOR_ITEMS[number]["id"];
+
 const FALLBACK_IMPACT: CircularImpact = {
   grandTotalKg: 2135.5,
   breakdown: [
@@ -122,6 +132,10 @@ function Index() {
   const [flatNumber, setFlatNumber] = useState("");          // e.g. "1204"
   const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "found" | "denied" | "error">("idle");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // Estimator weights (kg per material)
+  const [estimatorWeights, setEstimatorWeights] = useState<Record<EstimatorId, number>>({
+    paper: 0, plastic: 0, metal: 0, ewaste: 0,
+  });
   const [bookingSuccessData, setBookingSuccessData] = useState<{
     fullName: string;
     phone: string;
@@ -267,14 +281,20 @@ function Index() {
     }
   };
 
-  // Dynamic pricing calculation
-  let minEst = 0;
-  let maxEst = 0;
-  if (materials.includes("Paper / Cardboard")) { minEst += 50; maxEst += 150; }
-  if (materials.includes("Plastics")) { minEst += 30; maxEst += 100; }
-  if (materials.includes("Metals")) { minEst += 100; maxEst += 450; }
-  if (materials.includes("E-Waste")) { minEst += 100; maxEst += 900; }
-  if (materials.includes("Others")) { minEst += 20; maxEst += 100; }
+  // Dynamic pricing — driven by estimator weights
+  const estMin = ESTIMATOR_ITEMS.reduce((acc, item) => acc + estimatorWeights[item.id] * item.rateMin, 0);
+  const estMax = ESTIMATOR_ITEMS.reduce((acc, item) => acc + estimatorWeights[item.id] * item.rateMax, 0);
+  const estTotal = ESTIMATOR_ITEMS.reduce((acc, item) => acc + estimatorWeights[item.id] * ((item.rateMin + item.rateMax) / 2), 0);
+  const hasEstimate = estTotal > 0;
+
+  // Pre-fill booking form materials from estimator when CTA is clicked
+  function handleBookFromEstimator() {
+    const preFilled = ESTIMATOR_ITEMS
+      .filter(item => estimatorWeights[item.id] > 0)
+      .map(item => item.bookingMaterial);
+    if (preFilled.length > 0) setMaterials(preFilled);
+    document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" });
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -491,6 +511,135 @@ function Index() {
                 Every pickup gets a digital record — material, weight, rate, and amount paid.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── §2.2 Scrap Value Estimator ─── */}
+      <section id="estimator" className="mx-auto max-w-4xl px-4 py-14 sm:py-20">
+        <div className="text-center mb-10">
+          <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-600">
+            💰 Instant estimate — no sign-up needed
+          </span>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+            What's your scrap worth?
+          </h2>
+          <p className="mt-3 text-muted-foreground max-w-lg mx-auto">
+            Enter approximate weights below. We'll calculate your payout instantly — based on today's rates.
+          </p>
+        </div>
+
+        <div
+          className="rounded-3xl border border-border/60 bg-card p-6 sm:p-10"
+          style={{ boxShadow: "var(--shadow-elegant)" }}
+        >
+          {/* Material weight steppers */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {ESTIMATOR_ITEMS.map(item => {
+              const kg = estimatorWeights[item.id];
+              const lineMin = Math.round(kg * item.rateMin);
+              const lineMax = Math.round(kg * item.rateMax);
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "flex items-center justify-between rounded-2xl border p-4 transition-all",
+                    kg > 0
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border bg-background"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{item.emoji}</span>
+                    <div>
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        ₹{item.rateMin}–{item.rateMax}/kg
+                        {kg > 0 && (
+                          <span className="ml-1.5 font-bold text-primary">
+                            → ₹{lineMin}–{lineMax}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Weight stepper */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label={`Decrease ${item.label} weight`}
+                      onClick={() =>
+                        setEstimatorWeights(prev => ({
+                          ...prev,
+                          [item.id]: Math.max(0, prev[item.id] - 1),
+                        }))
+                      }
+                      className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer disabled:opacity-30"
+                      disabled={kg === 0}
+                    >
+                      −
+                    </button>
+                    <span className="w-10 text-center text-sm font-bold tabular-nums">
+                      {kg} kg
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Increase ${item.label} weight`}
+                      onClick={() =>
+                        setEstimatorWeights(prev => ({
+                          ...prev,
+                          [item.id]: prev[item.id] + 1,
+                        }))
+                      }
+                      className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Estimated total */}
+          <div className={cn(
+            "mt-6 rounded-2xl border p-5 text-center transition-all duration-300",
+            hasEstimate
+              ? "border-primary/30 bg-primary/5"
+              : "border-border/40 bg-muted/30"
+          )}>
+            {hasEstimate ? (
+              <>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estimated Payout</p>
+                <p className="mt-1 text-4xl font-extrabold text-primary tabular-nums">
+                  ₹{Math.round(estMin).toLocaleString("en-IN")} – ₹{Math.round(estMax).toLocaleString("en-IN")}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Based on today's rates · Actual payout confirmed after digital weighing
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Add weights above to see your estimated payout ↑
+              </p>
+            )}
+          </div>
+
+          {/* CTA */}
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center justify-center">
+            <Button
+              size="lg"
+              onClick={handleBookFromEstimator}
+              className="rounded-full px-8 shadow-lg cursor-pointer w-full sm:w-auto"
+            >
+              📅 Book Free Pickup{hasEstimate ? ` — Est. ₹${Math.round(estTotal).toLocaleString("en-IN")}` : ""}
+            </Button>
+            <a
+              href="/rates"
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+            >
+              View full rate card →
+            </a>
           </div>
         </div>
       </section>
@@ -767,13 +916,18 @@ function Index() {
               </div>
             </div>
 
-            {materials.length > 0 && (
+            {(materials.length > 0 || hasEstimate) && (
               <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-center text-xs animate-in fade-in duration-200 text-foreground">
                 <p className="font-bold">
-                  💰 Estimated payout: <span className="text-primary font-extrabold text-sm sm:text-base">₹{minEst} – ₹{maxEst}</span>
+                  💰 Estimated payout:{" "}
+                  <span className="text-primary font-extrabold text-sm sm:text-base">
+                    {hasEstimate
+                      ? `₹${Math.round(estMin).toLocaleString("en-IN")} – ₹${Math.round(estMax).toLocaleString("en-IN")}`
+                      : "Use the estimator above for an accurate estimate"}
+                  </span>
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Based on current rates • Actual payout depends on exact weight measured at collection
+                  Based on current rates · Actual payout depends on exact weight measured at collection
                 </p>
               </div>
             )}
