@@ -68,6 +68,26 @@ const FALLBACK_IMPACT: CircularImpact = {
   ]
 };
 
+// Societies served in Greater Noida West
+const SOCIETIES = [
+  "Gaur City 1",
+  "Gaur City 2",
+  "Mahagun Mywoods",
+  "Panchsheel Greens 2",
+  "Supertech Eco Village 1",
+  "Nirala Estate",
+  "Fusion Homes",
+  "Spring Homes",
+  "ATS Happy Trails",
+  "Ace Divino",
+  "CRC Joyous",
+  "Gulshan Bellina",
+  "Ace City",
+  "Ajnara Le Garden",
+  "Panchsheel Hynish",
+  "Renox Thrive",
+];
+
 function CountUp({ end, duration = 1200, decimals = 0 }: { end: number; duration?: number; decimals?: number }) {
   const [count, setCount] = useState(0);
 
@@ -94,6 +114,13 @@ function Index() {
   const [pincodeInput, setPincodeInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [impact, setImpact] = useState<CircularImpact>(FALLBACK_IMPACT);
+  // Address capture state
+  const [societyValue, setSocietyValue] = useState("");      // dropdown selection
+  const [societyOther, setSocietyOther] = useState("");      // free-text when "other"
+  const [towerBlock, setTowerBlock] = useState("");          // e.g. "Tower B"
+  const [flatNumber, setFlatNumber] = useState("");          // e.g. "1204"
+  const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "found" | "denied" | "error">("idle");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [bookingSuccessData, setBookingSuccessData] = useState<{
     fullName: string;
     phone: string;
@@ -123,11 +150,46 @@ function Index() {
   const toggleMaterial = (m: string) =>
     setMaterials((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
 
+  // Build the resolved society string (dropdown value or free-text "other")
+  const resolvedSociety = societyValue === "__other__" ? societyOther.trim() : societyValue;
+
+  // GPS geolocation + Nominatim reverse-geocode for pincode auto-fill
+  function handleGeolocate() {
+    if (!navigator.geolocation) {
+      toast.error("Your browser doesn't support GPS location.");
+      return;
+    }
+    setGeoStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCoords({ lat, lng });
+        // Free reverse-geocode via OpenStreetMap Nominatim — no API key needed
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+          { headers: { "Accept-Language": "en" } }
+        )
+          .then((r) => r.json())
+          .then((data) => {
+            const postcode = (data.address?.postcode || "").replace(/\s/g, "");
+            if (/^\d{6}$/.test(postcode)) setPincodeInput(postcode);
+            setGeoStatus("found");
+          })
+          .catch(() => setGeoStatus("found")); // coords saved even if reverse-geocode fails
+      },
+      (err) => {
+        setGeoStatus(err.code === 1 ? "denied" : "error");
+      },
+      { timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
-    if (!data.get("fullName") || !data.get("phone") || !data.get("society") || !date) {
+    if (!data.get("fullName") || !data.get("phone") || !resolvedSociety || !date) {
       toast.error("Please fill all required fields and pick a date.");
       return;
     }
@@ -150,23 +212,44 @@ function Index() {
 
     setSubmitting(true);
     try {
-      const payload = {
+      // Combine block + flat into a single tower string for backward compat
+      const towerStr = [towerBlock.trim(), flatNumber.trim()]
+        .filter(Boolean)
+        .join(" • Flat ") || undefined;
+
+      const payload: any = {
         fullName: String(data.get("fullName")),
         phone: String(data.get("phone")),
-        society: `${String(data.get("society"))} (PIN: ${cleanPin})`,
-        tower: String(data.get("tower") || "") || undefined,
+        society: `${resolvedSociety} (PIN: ${cleanPin})`,
+        tower: towerStr,
         pincode: cleanPin,
         pickupDate: format(date, "yyyy-MM-dd"),
         materials,
       };
+
+      // Attach coordinates if GPS was used
+      if (coords) {
+        payload.lat = coords.lat;
+        payload.lng = coords.lng;
+      }
       const result = await createBooking(
         payload,
         session?.access_token ?? undefined,
       );
       toast.success(result.message);
-      setBookingSuccessData(payload);
+      setBookingSuccessData({
+        ...payload,
+        society: resolvedSociety,
+        tower: payload.tower,
+      });
       form.reset();
       setPincodeInput("");
+      setSocietyValue("");
+      setSocietyOther("");
+      setTowerBlock("");
+      setFlatNumber("");
+      setCoords(null);
+      setGeoStatus("idle");
       setDate(undefined);
       setMaterials([]);
     } catch (err) {
@@ -512,29 +595,94 @@ function Index() {
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="society">Apartment society / Sector</Label>
-                <Input
+                <Label htmlFor="society">Apartment society / Complex</Label>
+                <select
                   id="society"
-                  name="society"
-                  placeholder="e.g. Gaur City , Sector 16C, Greater Noida West"
+                  value={societyValue}
+                  onChange={(e) => setSocietyValue(e.target.value)}
                   required
+                  className={cn(
+                    "flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+                    "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    !societyValue && "text-muted-foreground"
+                  )}
+                >
+                  <option value="" disabled>Select your society…</option>
+                  {SOCIETIES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                  <option value="__other__">Other — type below</option>
+                </select>
+                {societyValue === "__other__" && (
+                  <Input
+                    id="society-other"
+                    value={societyOther}
+                    onChange={(e) => setSocietyOther(e.target.value)}
+                    placeholder="e.g. Sector 16C, Greater Noida West"
+                    required
+                    className="mt-2"
+                  />
+                )}
+              </div>
+              {/* Tower/Block + Flat Number as separate fields */}
+              <div className="space-y-2">
+                <Label htmlFor="tower-block">Tower / Block</Label>
+                <Input
+                  id="tower-block"
+                  value={towerBlock}
+                  onChange={(e) => setTowerBlock(e.target.value)}
+                  placeholder="e.g. Tower B"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tower">Tower & flat number</Label>
-                <Input id="tower" name="tower" placeholder="Tower B • Flat 1204" />
+                <Label htmlFor="flat-number">Flat Number</Label>
+                <Input
+                  id="flat-number"
+                  value={flatNumber}
+                  onChange={(e) => setFlatNumber(e.target.value)}
+                  placeholder="e.g. 1204"
+                />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="pincode">Pincode *</Label>
-                  {(pincodeInput || "").length === 6 && (
-                    <span className={cn(
-                      "text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1",
-                      isPincodeSupported(pincodeInput) ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-red-500/10 text-red-600 border border-red-500/20"
-                    )}>
-                      {isPincodeSupported(pincodeInput) ? "✓ Serviceable" : "✕ Not Serviceable"}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {/* GPS button */}
+                    <button
+                      type="button"
+                      onClick={handleGeolocate}
+                      disabled={geoStatus === "loading"}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border transition-all cursor-pointer",
+                        geoStatus === "found"
+                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                          : geoStatus === "denied" || geoStatus === "error"
+                          ? "bg-red-500/10 text-red-600 border-red-500/20"
+                          : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                      )}
+                    >
+                      {geoStatus === "loading" ? (
+                        <><span className="animate-spin inline-block h-2.5 w-2.5 border border-current border-t-transparent rounded-full" /> Detecting…</>
+                      ) : geoStatus === "found" ? (
+                        <>✓ Location set</>
+                      ) : geoStatus === "denied" ? (
+                        <>📵 Access denied</>
+                      ) : geoStatus === "error" ? (
+                        <>⚠ GPS error</>
+                      ) : (
+                        <><MapPin className="h-2.5 w-2.5" /> Use My Location</>
+                      )}
+                    </button>
+                    {(pincodeInput || "").length === 6 && (
+                      <span className={cn(
+                        "text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1",
+                        isPincodeSupported(pincodeInput) ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-red-500/10 text-red-600 border border-red-500/20"
+                      )}>
+                        {isPincodeSupported(pincodeInput) ? "✓ Serviceable" : "✕ Not Serviceable"}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Input
                   id="pincode"
