@@ -84,6 +84,7 @@ const SOCIETIES = [
   "Gulshan Bellina",
   "Ace City",
   "Ajnara Le Garden",
+  "Ajnara Homes",
   "Panchsheel Hynish",
   "Renox Thrive",
 ];
