@@ -517,152 +517,23 @@ function Index() {
         </div>
       </section>
 
-      {/* ─── §2.2 Scrap Value Estimator ─── */}
-      <section id="estimator" className="mx-auto max-w-4xl px-4 py-14 sm:py-20">
+      {/* ─── Unified Booking Flow: Estimate → Book in one section ─── */}
+      <section id="booking" className="mx-auto max-w-4xl px-4 py-14 sm:py-20">
         <div className="text-center mb-10">
           <span className="inline-flex items-center gap-2 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-600">
-            💰 Instant estimate — no sign-up needed
+            💰 Instant estimate → Free pickup — no sign-up needed
           </span>
           <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-            What's your scrap worth?
+            Get paid for your scrap
           </h2>
           <p className="mt-3 text-muted-foreground max-w-lg mx-auto">
-            Enter approximate weights below. We'll calculate your payout instantly — based on today's rates.
-          </p>
-        </div>
-
-        <div
-          className="rounded-3xl border border-border/60 bg-card p-6 sm:p-10"
-          style={{ boxShadow: "var(--shadow-elegant)" }}
-        >
-          {/* Material weight steppers */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {ESTIMATOR_ITEMS.map(item => {
-              const kg = estimatorWeights[item.id];
-              const lineMin = Math.round(kg * item.rateMin);
-              const lineMax = Math.round(kg * item.rateMax);
-              return (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "flex items-center justify-between rounded-2xl border p-4 transition-all",
-                    kg > 0
-                      ? "border-primary/40 bg-primary/5"
-                      : "border-border bg-background"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{item.emoji}</span>
-                    <div>
-                      <p className="text-sm font-semibold">{item.label}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        ₹{item.rateMin}–{item.rateMax}/kg
-                        {kg > 0 && (
-                          <span className="ml-1.5 font-bold text-primary">
-                            → ₹{lineMin}–{lineMax}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  {/* Weight stepper */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      aria-label={`Decrease ${item.label} weight`}
-                      onClick={() =>
-                        setEstimatorWeights(prev => ({
-                          ...prev,
-                          [item.id]: Math.max(0, prev[item.id] - 1),
-                        }))
-                      }
-                      className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer disabled:opacity-30"
-                      disabled={kg === 0}
-                    >
-                      −
-                    </button>
-                    <span className="w-10 text-center text-sm font-bold tabular-nums">
-                      {kg} kg
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Increase ${item.label} weight`}
-                      onClick={() =>
-                        setEstimatorWeights(prev => ({
-                          ...prev,
-                          [item.id]: prev[item.id] + 1,
-                        }))
-                      }
-                      className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Estimated total */}
-          <div className={cn(
-            "mt-6 rounded-2xl border p-5 text-center transition-all duration-300",
-            hasEstimate
-              ? "border-primary/30 bg-primary/5"
-              : "border-border/40 bg-muted/30"
-          )}>
-            {hasEstimate ? (
-              <>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estimated Payout</p>
-                <p className="mt-1 text-4xl font-extrabold text-primary tabular-nums">
-                  ₹{Math.round(estMin).toLocaleString("en-IN")} – ₹{Math.round(estMax).toLocaleString("en-IN")}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Based on today's rates · Actual payout confirmed after digital weighing
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Add weights above to see your estimated payout ↑
-              </p>
-            )}
-          </div>
-
-          {/* CTA */}
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center justify-center">
-            <Button
-              size="lg"
-              onClick={handleBookFromEstimator}
-              className="rounded-full px-8 shadow-lg cursor-pointer w-full sm:w-auto"
-            >
-              📅 Book Free Pickup{hasEstimate ? ` — Est. ₹${Math.round(estTotal).toLocaleString("en-IN")}` : ""}
-            </Button>
-            <a
-              href="/rates"
-              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-            >
-              View full rate card →
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* Booking form */}
-      <section id="booking" className="mx-auto max-w-4xl px-4 py-16 sm:py-24">
-        <div className="text-center">
-          <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            <CalendarCheck className="h-3.5 w-3.5" /> Book your pickup
-          </span>
-          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-            Schedule a pickup
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            Get your recyclables collected and paid out dynamically.
+            Select your materials, see what they're worth, and book a free doorstep pickup — all in one step.
           </p>
         </div>
 
         {bookingSuccessData ? (
           <div
-            className="mt-10 rounded-3xl border border-emerald-500/30 bg-emerald-500/5 p-6 sm:p-10 text-center animate-in fade-in zoom-in-95 duration-300"
+            className="rounded-3xl border border-emerald-500/30 bg-emerald-500/5 p-6 sm:p-10 text-center animate-in fade-in zoom-in-95 duration-300"
             style={{ boxShadow: "var(--shadow-elegant)" }}
           >
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
@@ -721,233 +592,359 @@ function Index() {
           <form
             onSubmit={handleSubmit}
             autoComplete="off"
-            className="mt-10 rounded-3xl border border-border/60 bg-card p-6 sm:p-10"
+            className="rounded-3xl border border-border/60 bg-card p-6 sm:p-10"
             style={{ boxShadow: "var(--shadow-elegant)" }}
           >
-            <div className="mb-6 text-left">
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary">
-                ⚡ Quick booking — under 2 minutes. No account needed.
-              </span>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full name</Label>
-                <Input id="fullName" name="fullName" placeholder="Sai Shankar" required />
+            {/* ── Step 1: Material Estimator ── */}
+            <div className="mb-2">
+              <div className="flex items-center gap-3 mb-5">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white text-xs font-bold">1</span>
+                <h3 className="text-base font-semibold text-foreground">What scrap do you have?</h3>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">WhatsApp number</Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  inputMode="tel"
-                  pattern="[0-9+ ]{10,15}"
-                  placeholder="+91 98765 12345"
-                  required
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                {ESTIMATOR_ITEMS.map(item => {
+                  const kg = estimatorWeights[item.id];
+                  const lineMin = Math.round(kg * item.rateMin);
+                  const lineMax = Math.round(kg * item.rateMax);
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "flex items-center justify-between rounded-2xl border p-4 transition-all",
+                        kg > 0
+                          ? "border-primary/40 bg-primary/5"
+                          : "border-border bg-background"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{item.emoji}</span>
+                        <div>
+                          <p className="text-sm font-semibold">{item.label}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            ₹{item.rateMin}–{item.rateMax}/kg
+                            {kg > 0 && (
+                              <span className="ml-1.5 font-bold text-primary">
+                                → ₹{lineMin}–{lineMax}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      {/* Weight stepper */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label={`Decrease ${item.label} weight`}
+                          onClick={() =>
+                            setEstimatorWeights(prev => ({
+                              ...prev,
+                              [item.id]: Math.max(0, prev[item.id] - 1),
+                            }))
+                          }
+                          className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer disabled:opacity-30"
+                          disabled={kg === 0}
+                        >
+                          −
+                        </button>
+                        <span className="w-10 text-center text-sm font-bold tabular-nums">
+                          {kg} kg
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Increase ${item.label} weight`}
+                          onClick={() =>
+                            setEstimatorWeights(prev => ({
+                              ...prev,
+                              [item.id]: prev[item.id] + 1,
+                            }))
+                          }
+                          className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="society">Apartment society / Complex</Label>
-                <select
-                  id="society"
-                  value={societyValue}
-                  onChange={(e) => setSocietyValue(e.target.value)}
-                  required
-                  className={cn(
-                    "flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-                    "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                    "disabled:cursor-not-allowed disabled:opacity-50",
-                    !societyValue && "text-muted-foreground"
-                  )}
+
+              {/* Estimated payout */}
+              <div className={cn(
+                "mt-6 rounded-2xl border p-5 text-center transition-all duration-300",
+                hasEstimate
+                  ? "border-primary/30 bg-primary/5"
+                  : "border-border/40 bg-muted/30"
+              )}>
+                {hasEstimate ? (
+                  <>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estimated Payout</p>
+                    <p className="mt-1 text-4xl font-extrabold text-primary tabular-nums">
+                      ₹{Math.round(estMin).toLocaleString("en-IN")} – ₹{Math.round(estMax).toLocaleString("en-IN")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Based on today's rates · Actual payout confirmed after digital weighing
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Add weights above to see your estimated payout ↑
+                  </p>
+                )}
+              </div>
+
+              {/* Rate card link */}
+              <div className="mt-3 text-center">
+                <a
+                  href="/rates"
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                 >
-                  <option value="" disabled>Select your society…</option>
-                  {SOCIETIES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                  <option value="__other__">Other — type below</option>
-                </select>
-                {societyValue === "__other__" && (
-                  <Input
-                    id="society-other"
-                    value={societyOther}
-                    onChange={(e) => setSocietyOther(e.target.value)}
-                    placeholder="e.g. Sector 16C, Greater Noida West"
-                    required
-                    className="mt-2"
-                  />
-                )}
+                  View full rate card →
+                </a>
               </div>
-              {/* Tower/Block + Flat Number as separate fields */}
-              <div className="space-y-2">
-                <Label htmlFor="tower-block">Tower / Block</Label>
-                <Input
-                  id="tower-block"
-                  value={towerBlock}
-                  onChange={(e) => setTowerBlock(e.target.value)}
-                  placeholder="e.g. Tower B"
-                />
+            </div>
+
+            {/* ── Divider between steps ── */}
+            <div className="relative my-8">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+              <div className="relative flex justify-center">
+                <span className="bg-card px-4 text-xs text-muted-foreground font-medium">continue below to book</span>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="flat-number">Flat Number</Label>
-                <Input
-                  id="flat-number"
-                  value={flatNumber}
-                  onChange={(e) => setFlatNumber(e.target.value)}
-                  placeholder="e.g. 1204"
-                />
+            </div>
+
+            {/* ── Step 2: Booking Details ── */}
+            <div>
+              <div className="flex items-center gap-3 mb-5">
+                <span className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
+                  hasEstimate ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                )}>2</span>
+                <h3 className={cn("text-base font-semibold", hasEstimate ? "text-foreground" : "text-muted-foreground")}>Your details & pickup date</h3>
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1 text-[10px] font-semibold text-primary ml-auto">
+                  ⚡ Under 2 min · No account needed
+                </span>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="pincode">Pincode *</Label>
-                  <div className="flex items-center gap-2">
-                    {/* GPS button */}
-                    <button
-                      type="button"
-                      onClick={handleGeolocate}
-                      disabled={geoStatus === "loading"}
-                      className={cn(
-                        "inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border transition-all cursor-pointer",
-                        geoStatus === "found"
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                          : geoStatus === "denied" || geoStatus === "error"
-                          ? "bg-red-500/10 text-red-600 border-red-500/20"
-                          : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                      )}
-                    >
-                      {geoStatus === "loading" ? (
-                        <><span className="animate-spin inline-block h-2.5 w-2.5 border border-current border-t-transparent rounded-full" /> Detecting…</>
-                      ) : geoStatus === "found" ? (
-                        <>✓ Location set</>
-                      ) : geoStatus === "denied" ? (
-                        <>📵 Access denied</>
-                      ) : geoStatus === "error" ? (
-                        <>⚠ GPS error</>
-                      ) : (
-                        <><MapPin className="h-2.5 w-2.5" /> Use My Location</>
-                      )}
-                    </button>
-                    {(pincodeInput || "").length === 6 && (
-                      <span className={cn(
-                        "text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1",
-                        isPincodeSupported(pincodeInput) ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-red-500/10 text-red-600 border border-red-500/20"
-                      )}>
-                        {isPincodeSupported(pincodeInput) ? "✓ Serviceable" : "✕ Not Serviceable"}
-                      </span>
-                    )}
-                  </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full name</Label>
+                  <Input id="fullName" name="fullName" placeholder="Sai Shankar" required />
                 </div>
-                <Input
-                  id="pincode"
-                  name="pincode"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="e.g. 201306"
-                  value={pincodeInput || ""}
-                  onChange={(e) => setPincodeInput((e.target?.value || "").replace(/\D/g, "").slice(0, 6))}
-                  required
-                  className={cn(
-                    "rounded-xl transition-all",
-                    (pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && "border-red-500 focus-visible:ring-red-500 bg-red-50/20",
-                    (pincodeInput || "").length === 6 && isPincodeSupported(pincodeInput) && "border-emerald-500 focus-visible:ring-emerald-500 bg-emerald-50/20"
-                  )}
-                />
-                {(pincodeInput || "").length === 6 && isPincodeSupported(pincodeInput) && (
-                  <p className="text-xs text-emerald-600 font-medium">
-                    📍 Area: {getPincodeLocation(pincodeInput) || "Serviceable Area"}
-                  </p>
-                )}
-                {(pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && (
-                  <p className="text-xs text-red-500 font-medium">
-                    Pickup is currently only available in Noida, Greater Noida, Noida Extension & Indirapuram.
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>Preferred pickup date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !date && "text-muted-foreground",
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      initialFocus
-                      disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
-                      className={cn("p-3 pointer-events-auto")}
+                <div className="space-y-2">
+                  <Label htmlFor="phone">WhatsApp number</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    pattern="[0-9+ ]{10,15}"
+                    placeholder="+91 98765 12345"
+                    required
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="society">Apartment society / Complex</Label>
+                  <select
+                    id="society"
+                    value={societyValue}
+                    onChange={(e) => setSocietyValue(e.target.value)}
+                    required
+                    className={cn(
+                      "flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+                      "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                      "disabled:cursor-not-allowed disabled:opacity-50",
+                      !societyValue && "text-muted-foreground"
+                    )}
+                  >
+                    <option value="" disabled>Select your society…</option>
+                    {SOCIETIES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    <option value="__other__">Other — type below</option>
+                  </select>
+                  {societyValue === "__other__" && (
+                    <Input
+                      id="society-other"
+                      value={societyOther}
+                      onChange={(e) => setSocietyOther(e.target.value)}
+                      placeholder="e.g. Sector 16C, Greater Noida West"
+                      required
+                      className="mt-2"
                     />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-3 sm:col-span-2">
-                <Label>Material estimate</Label>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {MATERIALS.map((m) => {
-                    const active = materials.includes(m);
-                    return (
-                      <label
-                        key={m}
+                  )}
+                </div>
+                {/* Tower/Block + Flat Number */}
+                <div className="space-y-2">
+                  <Label htmlFor="tower-block">Tower / Block</Label>
+                  <Input
+                    id="tower-block"
+                    value={towerBlock}
+                    onChange={(e) => setTowerBlock(e.target.value)}
+                    placeholder="e.g. Tower B"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="flat-number">Flat Number</Label>
+                  <Input
+                    id="flat-number"
+                    value={flatNumber}
+                    onChange={(e) => setFlatNumber(e.target.value)}
+                    placeholder="e.g. 1204"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="pincode">Pincode *</Label>
+                    <div className="flex items-center gap-2">
+                      {/* GPS button */}
+                      <button
+                        type="button"
+                        onClick={handleGeolocate}
+                        disabled={geoStatus === "loading"}
                         className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm transition-all",
-                          active
-                            ? "border-primary bg-primary/5 text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:border-primary/40",
+                          "inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border transition-all cursor-pointer",
+                          geoStatus === "found"
+                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                            : geoStatus === "denied" || geoStatus === "error"
+                            ? "bg-red-500/10 text-red-600 border-red-500/20"
+                            : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
                         )}
                       >
-                        <Checkbox
-                          checked={active}
-                          onCheckedChange={() => toggleMaterial(m)}
-                        />
-                        <span>{m}</span>
-                      </label>
-                    );
-                  })}
+                        {geoStatus === "loading" ? (
+                          <><span className="animate-spin inline-block h-2.5 w-2.5 border border-current border-t-transparent rounded-full" /> Detecting…</>
+                        ) : geoStatus === "found" ? (
+                          <>✓ Location set</>
+                        ) : geoStatus === "denied" ? (
+                          <>📵 Access denied</>
+                        ) : geoStatus === "error" ? (
+                          <>⚠ GPS error</>
+                        ) : (
+                          <><MapPin className="h-2.5 w-2.5" /> Use My Location</>
+                        )}
+                      </button>
+                      {(pincodeInput || "").length === 6 && (
+                        <span className={cn(
+                          "text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1",
+                          isPincodeSupported(pincodeInput) ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-red-500/10 text-red-600 border border-red-500/20"
+                        )}>
+                          {isPincodeSupported(pincodeInput) ? "✓ Serviceable" : "✕ Not Serviceable"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Input
+                    id="pincode"
+                    name="pincode"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="e.g. 201306"
+                    value={pincodeInput || ""}
+                    onChange={(e) => setPincodeInput((e.target?.value || "").replace(/\D/g, "").slice(0, 6))}
+                    required
+                    className={cn(
+                      "rounded-xl transition-all",
+                      (pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && "border-red-500 focus-visible:ring-red-500 bg-red-50/20",
+                      (pincodeInput || "").length === 6 && isPincodeSupported(pincodeInput) && "border-emerald-500 focus-visible:ring-emerald-500 bg-emerald-50/20"
+                    )}
+                  />
+                  {(pincodeInput || "").length === 6 && isPincodeSupported(pincodeInput) && (
+                    <p className="text-xs text-emerald-600 font-medium">
+                      📍 Area: {getPincodeLocation(pincodeInput) || "Serviceable Area"}
+                    </p>
+                  )}
+                  {(pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && (
+                    <p className="text-xs text-red-500 font-medium">
+                      Pickup is currently only available in Noida, Greater Noida, Noida Extension & Indirapuram.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Preferred pickup date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !date && "text-muted-foreground",
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? format(date, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={setDate}
+                        initialFocus
+                        disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                {/* Hidden material checkboxes — auto-filled from estimator */}
+                <div className="space-y-3 sm:col-span-2">
+                  <Label>Material types (auto-selected from above)</Label>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {MATERIALS.map((m) => {
+                      const active = materials.includes(m);
+                      return (
+                        <label
+                          key={m}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm transition-all",
+                            active
+                              ? "border-primary bg-primary/5 text-foreground"
+                              : "border-border bg-background text-muted-foreground hover:border-primary/40",
+                          )}
+                        >
+                          <Checkbox
+                            checked={active}
+                            onCheckedChange={() => toggleMaterial(m)}
+                          />
+                          <span>{m}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
+
+              {/* Inline estimated payout reminder (when estimate was made in step 1) */}
+              {hasEstimate && (
+                <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-center text-xs animate-in fade-in duration-200 text-foreground">
+                  <p className="font-bold">
+                    💰 Estimated payout:{" "}
+                    <span className="text-primary font-extrabold text-sm sm:text-base">
+                      ₹{Math.round(estMin).toLocaleString("en-IN")} – ₹{Math.round(estMax).toLocaleString("en-IN")}
+                    </span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Based on current rates · Actual payout depends on exact weight measured at collection
+                  </p>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                size="lg"
+                disabled={submitting}
+                className="mt-8 w-full rounded-full text-base shadow-lg cursor-pointer"
+              >
+                {submitting ? "Confirming..." : hasEstimate ? `Confirm Booking — Est. ₹${Math.round(estTotal).toLocaleString("en-IN")}` : "Confirm Booking"}
+              </Button>
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                You'll receive a WhatsApp confirmation within 4 hours.
+              </p>
             </div>
-
-            {(materials.length > 0 || hasEstimate) && (
-              <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-center text-xs animate-in fade-in duration-200 text-foreground">
-                <p className="font-bold">
-                  💰 Estimated payout:{" "}
-                  <span className="text-primary font-extrabold text-sm sm:text-base">
-                    {hasEstimate
-                      ? `₹${Math.round(estMin).toLocaleString("en-IN")} – ₹${Math.round(estMax).toLocaleString("en-IN")}`
-                      : "Use the estimator above for an accurate estimate"}
-                  </span>
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Based on current rates · Actual payout depends on exact weight measured at collection
-                </p>
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              size="lg"
-              disabled={submitting}
-              className="mt-8 w-full rounded-full text-base shadow-lg cursor-pointer"
-            >
-              {submitting ? "Confirming..." : "Confirm Booking"}
-            </Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              You'll receive a WhatsApp confirmation within 4 hours.
-            </p>
           </form>
         )}
       </section>
+
 
       {/* Testimonials Section */}
       <section className="bg-muted/30 py-16 sm:py-24 border-t border-border/60">
