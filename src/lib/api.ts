@@ -219,6 +219,9 @@ export type ERPDashboardData = {
     txn_count_this_month: number;
     buy_cost_this_month: number;
     profit_loss: number;
+    period_label: string;
+    period_start: string;
+    period_end: string;
   };
   low_stock_alerts: {
     id: string;
@@ -288,8 +291,20 @@ async function authFetch<T>(url: string, token?: string, options: RequestInit = 
   return parseJson<T>(await fetch(url, { ...options, headers }));
 }
 
-export async function fetchERPDashboard(token?: string): Promise<{ success: boolean; dashboard: ERPDashboardData }> {
-  return authFetch(`${API_BASE}/api/erp/dashboard`, token);
+export type DashboardPeriod = "month" | "quarter" | "year";
+
+export async function fetchERPDashboard(
+  token?: string,
+  period: DashboardPeriod = "month",
+  year?: number,
+  month?: number,
+  quarter?: number,
+): Promise<{ success: boolean; dashboard: ERPDashboardData }> {
+  const params = new URLSearchParams({ period });
+  if (year)    params.set("year",    String(year));
+  if (month)   params.set("month",   String(month));
+  if (quarter) params.set("quarter", String(quarter));
+  return authFetch(`${API_BASE}/api/erp/dashboard?${params.toString()}`, token);
 }
 
 export async function fetchERPMaterials(token?: string, category?: string): Promise<{ success: boolean; count: number; materials: ERPMaterial[] }> {

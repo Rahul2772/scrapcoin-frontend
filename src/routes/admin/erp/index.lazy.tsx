@@ -2,7 +2,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { fetchERPDashboard, type ERPDashboardData } from "@/lib/api";
+import { fetchERPDashboard, type ERPDashboardData, type DashboardPeriod } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,6 +14,8 @@ import {
   Calendar,
   ArrowUpRight,
   ArrowDownRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   BarChart,
@@ -29,9 +31,9 @@ import {
   Legend,
 } from "recharts";
 
-export const Route = createLazyFileRoute("/admin/erp/")({
+export const Route = createLazyFileRoute("/admin/erp/")(({
   component: ERPDashboard,
-});
+}));
 
 const INVOICE_STATUS_COLORS = {
   paid: "bg-green-100 text-green-700 border-green-200",
@@ -42,17 +44,45 @@ const INVOICE_STATUS_COLORS = {
 
 const CHART_COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#0088fe", "#00c49f"];
 
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// ── Helper: quarter label ───────────────────────────────────────────────────
+function quarterLabel(q: number, year: number) {
+  const ranges = ["Jan–Mar", "Apr–Jun", "Jul–Sep", "Oct–Dec"];
+  return `Q${q} ${year} · ${ranges[q - 1]}`;
+}
+
 function ERPDashboard() {
   const { session } = useAuth();
-  const [data, setData] = useState<ERPDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [data, setData]               = useState<ERPDashboardData | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [liveStatus, setLiveStatus]   = useState<"connecting" | "live" | "offline">("connecting");
+  const debounceRef                   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Period state ────────────────────────────────────────────────────────────
+  const now = new Date();
+  const [period,          setPeriod]          = useState<DashboardPeriod>("month");
+  const [selectedYear,    setSelectedYear]    = useState(now.getFullYear());
+  const [selectedMonth,   setSelectedMonth]   = useState(now.getMonth() + 1);  // 1-12
+  const [selectedQuarter, setSelectedQuarter] = useState(Math.ceil((now.getMonth() + 1) / 3));
+
+  // ── Load dashboard with current period ─────────────────────────────────────
   async function loadDashboard(token: string, showLoading = false) {
     if (showLoading) setLoading(true);
     try {
-      const res = await fetchERPDashboard(token);
+      let res;
+      if (period === "month") {
+        // Default (no explicit year/month) = rolling 30 days; explicit = calendar month
+        const isDefault = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
+        res = isDefault
+          ? await fetchERPDashboard(token, "month")
+          : await fetchERPDashboard(token, "month", selectedYear, selectedMonth);
+      } else if (period === "quarter") {
+        res = await fetchERPDashboard(token, "quarter", selectedYear, undefined, selectedQuarter);
+      } else {
+        res = await fetchERPDashboard(token, "year", selectedYear);
+      }
       if (res.success) setData(res.dashboard);
     } catch (err) {
       console.error("[ERP Dashboard] Refresh error:", err);
@@ -66,6 +96,12 @@ function ERPDashboard() {
     if (!session?.access_token) return;
     loadDashboard(session.access_token, true);
   }, [session]);
+
+  // Reload when period/year/month/quarter changes
+  useEffect(() => {
+    if (!session?.access_token) return;
+    loadDashboard(session.access_token, true);
+  }, [period, selectedYear, selectedMonth, selectedQuarter]);
 
   // Supabase Realtime — auto-refresh on data changes
   useEffect(() => {
@@ -98,6 +134,36 @@ function ERPDashboard() {
     };
   }, [session]);
 
+  // ── Navigator helpers ───────────────────────────────────────────────────────
+  function navigateMonth(dir: -1 | 1) {
+    let m = selectedMonth + dir;
+    let y = selectedYear;
+    if (m < 1)  { m = 12; y--; }
+    if (m > 12) { m = 1;  y++; }
+    setSelectedMonth(m);
+    setSelectedYear(y);
+  }
+
+  function navigateQuarter(dir: -1 | 1) {
+    let q = selectedQuarter + dir;
+    let y = selectedYear;
+    if (q < 1) { q = 4; y--; }
+    if (q > 4) { q = 1; y++; }
+    setSelectedQuarter(q);
+    setSelectedYear(y);
+  }
+
+  function navigateYear(dir: -1 | 1) {
+    setSelectedYear((y) => y + dir);
+  }
+
+  // ── Period label for display ────────────────────────────────────────────────
+  function activePeriodLabel(): string {
+    if (data?.revenue?.period_label) return data.revenue.period_label;
+    if (period === "month") return `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+    if (period === "quarter") return quarterLabel(selectedQuarter, selectedYear);
+    return `FY ${selectedYear}`;
+  }
 
   if (loading || !data) {
     return (
@@ -119,35 +185,77 @@ function ERPDashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Live status indicator */}
-      <div className="flex items-center justify-end">
-        {liveStatus === "live" && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+
+      {/* ── Header: Period Picker + LIVE indicator ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+
+        {/* Period pill tabs */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/50 border border-border/60 w-fit">
+          {(["month", "quarter", "year"] as DashboardPeriod[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all duration-200 ${
+                period === p
+                  ? "bg-background text-foreground shadow-sm border border-border/60"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+              }`}
+            >
+              {p === "month" ? "Monthly" : p === "quarter" ? "Quarterly" : "Yearly"}
+            </button>
+          ))}
+        </div>
+
+        {/* Live indicator */}
+        <div className="flex items-center gap-3">
+          {/* Period navigator */}
+          <div className="flex items-center gap-1.5 bg-muted/40 border border-border/50 rounded-xl px-2 py-1">
+            <button
+              onClick={() => period === "month" ? navigateMonth(-1) : period === "quarter" ? navigateQuarter(-1) : navigateYear(-1)}
+              className="h-6 w-6 flex items-center justify-center rounded-lg hover:bg-background/80 transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="text-[11px] font-semibold text-foreground min-w-[120px] text-center">
+              {activePeriodLabel()}
             </span>
-            LIVE
-          </span>
-        )}
-        {liveStatus === "connecting" && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-500">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+            <button
+              onClick={() => period === "month" ? navigateMonth(1) : period === "quarter" ? navigateQuarter(1) : navigateYear(1)}
+              className="h-6 w-6 flex items-center justify-center rounded-lg hover:bg-background/80 transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* LIVE dot */}
+          {liveStatus === "live" && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              LIVE
             </span>
-            Connecting…
-          </span>
-        )}
-        {liveStatus === "offline" && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-            <span className="inline-flex rounded-full h-2 w-2 bg-gray-400" />
-            Offline
-          </span>
-        )}
+          )}
+          {liveStatus === "connecting" && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-500">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+              </span>
+              Connecting…
+            </span>
+          )}
+          {liveStatus === "offline" && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+              <span className="inline-flex rounded-full h-2 w-2 bg-gray-400" />
+              Offline
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Stat Cards — Sell Revenue · Buy Cost · Weight · Scale Tickets · Gross P&L */}
+      {/* ── Stat Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
 
         {/* 1 — B2B Sell Revenue */}
@@ -160,7 +268,7 @@ function ERPDashboard() {
             ₹{revenue.revenue_this_month.toLocaleString("en-IN")}
           </p>
           <div className="mt-1 text-[10px] text-emerald-600">
-            B2B sales to recyclers · last 30 days
+            B2B sales to recyclers · {revenue.period_label ?? activePeriodLabel()}
           </div>
         </div>
 
@@ -174,7 +282,7 @@ function ERPDashboard() {
             ₹{(revenue.buy_cost_this_month ?? 0).toLocaleString("en-IN")}
           </p>
           <div className="mt-1 text-[10px] text-rose-500">
-            Paid to household customers · last 30 days
+            Paid to household customers · {revenue.period_label ?? activePeriodLabel()}
           </div>
         </div>
 
@@ -189,11 +297,11 @@ function ERPDashboard() {
           </p>
           <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            <span>Rolling 30-day window</span>
+            <span>{revenue.period_label ?? activePeriodLabel()}</span>
           </div>
         </div>
 
-        {/* 4 — B2B Scale Ticket Count */}
+        {/* 4 — Scale Ticket Count */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between text-muted-foreground">
             <span className="text-xs font-semibold uppercase tracking-wider">Scale Tickets</span>
@@ -203,11 +311,11 @@ function ERPDashboard() {
             {revenue.txn_count_this_month}
           </p>
           <div className="mt-1 text-[10px] text-muted-foreground">
-            B2B transactions · last 30 days
+            B2B transactions · {revenue.period_label ?? activePeriodLabel()}
           </div>
         </div>
 
-        {/* 5 — Gross Profit / Loss */}
+        {/* 5 — Gross P&L */}
         <div className={`rounded-2xl border p-5 shadow-sm ${
           revenue.profit_loss >= 0
             ? "border-emerald-500/30 bg-emerald-500/5"
@@ -233,12 +341,12 @@ function ERPDashboard() {
 
       </div>
 
-      {/* Charts section */}
+      {/* ── Charts section ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Buy & Sell Trend Bar Chart */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-foreground">6-Month Buy & Sell Trend</h2>
+            <h2 className="text-sm font-semibold text-foreground">6-Month Buy &amp; Sell Trend</h2>
             <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#3b82f6" }} />
@@ -274,11 +382,14 @@ function ERPDashboard() {
 
         {/* Top Materials Pie Chart */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-foreground mb-4">Top Materials (Revenue)</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-foreground">Top Materials (Revenue)</h2>
+            <span className="text-[10px] text-muted-foreground">{revenue.period_label ?? activePeriodLabel()}</span>
+          </div>
           <div className="h-[180px] w-full relative">
             {top_materials.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-                No collection records this month
+                No collection records this period
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -400,6 +511,7 @@ function ERPDashboard() {
           </div>
         </div>
       </div>
+
       {/* Material-wise Profit & Loss Table */}
       <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -505,10 +617,10 @@ function ERPDashboard() {
                   </td>
                   <td className="pt-3 text-right">
                     {(() => {
-                      const totalCogs = (material_pnl || []).reduce((s, m) => s + m.cogs, 0);
+                      const totalCogs   = (material_pnl || []).reduce((s, m) => s + m.cogs, 0);
                       const totalProfit = (material_pnl || []).reduce((s, m) => s + (m.sell_weight > 0 ? m.profit_loss : 0), 0);
                       const totalMargin = totalCogs > 0 ? ((totalProfit / totalCogs) * 100).toFixed(1) : "0.0";
-                      const numMargin = Number(totalMargin);
+                      const numMargin   = Number(totalMargin);
                       return (
                         <span className={`font-bold ${numMargin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                           {numMargin >= 0 ? "+" : ""}{totalMargin}%
