@@ -160,7 +160,7 @@ function ERPDashboard() {
             ₹{revenue.revenue_this_month.toLocaleString("en-IN")}
           </p>
           <div className="mt-1 text-[10px] text-emerald-600">
-            B2B sales to recyclers this month
+            B2B sales to recyclers · last 30 days
           </div>
         </div>
 
@@ -174,7 +174,7 @@ function ERPDashboard() {
             ₹{(revenue.buy_cost_this_month ?? 0).toLocaleString("en-IN")}
           </p>
           <div className="mt-1 text-[10px] text-rose-500">
-            Paid to household customers this month
+            Paid to household customers · last 30 days
           </div>
         </div>
 
@@ -189,7 +189,7 @@ function ERPDashboard() {
           </p>
           <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            <span>This calendar month</span>
+            <span>Rolling 30-day window</span>
           </div>
         </div>
 
@@ -203,7 +203,7 @@ function ERPDashboard() {
             {revenue.txn_count_this_month}
           </p>
           <div className="mt-1 text-[10px] text-muted-foreground">
-            B2B transactions this month
+            B2B transactions · last 30 days
           </div>
         </div>
 
