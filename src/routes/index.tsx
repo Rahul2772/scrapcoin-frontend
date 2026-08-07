@@ -22,6 +22,8 @@ import {
   Truck,
   Building,
   FileText,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +32,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { useAuth } from "@/context/AuthContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -127,6 +137,7 @@ function Index() {
   const [impact, setImpact] = useState<CircularImpact>(FALLBACK_IMPACT);
   // Address capture state
   const [societyValue, setSocietyValue] = useState("");      // dropdown selection
+  const [societyOpen, setSocietyOpen] = useState(false);     // combobox open state
   const [societyOther, setSocietyOther] = useState("");      // free-text when "other"
   const [towerBlock, setTowerBlock] = useState("");          // e.g. "Tower B"
   const [flatNumber, setFlatNumber] = useState("");          // e.g. "1204"
@@ -734,24 +745,69 @@ function Index() {
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="society">Apartment society / Complex</Label>
-                  <select
-                    id="society"
-                    value={societyValue}
-                    onChange={(e) => setSocietyValue(e.target.value)}
-                    required
-                    className={cn(
-                      "flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-                      "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                      "disabled:cursor-not-allowed disabled:opacity-50",
-                      !societyValue && "text-muted-foreground"
-                    )}
-                  >
-                    <option value="" disabled>Select your society…</option>
-                    {SOCIETIES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                    <option value="__other__">Other — type below</option>
-                  </select>
+                  <Popover open={societyOpen} onOpenChange={setSocietyOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={societyOpen}
+                        className={cn(
+                          "flex h-10 w-full justify-between rounded-xl font-normal px-3 border-input",
+                          !societyValue && "text-muted-foreground"
+                        )}
+                      >
+                        {societyValue
+                          ? societyValue === "__other__" ? "Other — type below" : societyValue
+                          : "Select your society..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[200px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search society..." />
+                        <CommandList>
+                          <CommandEmpty>No society found.</CommandEmpty>
+                          <CommandGroup className="max-h-64 overflow-auto">
+                            {SOCIETIES.map((s) => (
+                              <CommandItem
+                                key={s}
+                                value={s}
+                                onSelect={(currentValue) => {
+                                  // shadcn command lowercases the value for some reason, so find original
+                                  const original = SOCIETIES.find(soc => soc.toLowerCase() === currentValue) || s;
+                                  setSocietyValue(original);
+                                  setSocietyOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    societyValue === s ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {s}
+                              </CommandItem>
+                            ))}
+                            <CommandItem
+                              value="__other__"
+                              onSelect={() => {
+                                setSocietyValue("__other__");
+                                setSocietyOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  societyValue === "__other__" ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              Other — type below
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   {societyValue === "__other__" && (
                     <Input
                       id="society-other"
@@ -976,7 +1032,6 @@ function Index() {
         </div>
       </section>
 
-      {/* FAQ Snippet Section */}
       <section className="mx-auto max-w-4xl px-4 py-16 sm:py-24 border-t border-border/60 text-left">
         <div className="mx-auto max-w-2xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
@@ -1033,6 +1088,16 @@ function Index() {
 
       {/* Floating WhatsApp Button */}
       <WhatsAppFAB />
+
+      {/* Sticky Mobile CTA */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/80 backdrop-blur-md border-t border-border/50 z-40 md:hidden">
+        <Button
+          onClick={() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" })}
+          className="w-full rounded-full h-12 shadow-lg shadow-primary/20 text-base font-bold cursor-pointer"
+        >
+          📅 Book Free Pickup
+        </Button>
+      </div>
     </div>
   );
 }
