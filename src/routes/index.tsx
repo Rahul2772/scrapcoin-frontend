@@ -566,19 +566,10 @@ function Index() {
             </div>
 
             <p className="mt-6 text-xs text-muted-foreground">
-              A confirmation message has been queued to your number. For instant scheduling, please share the details with our admin directly.
+              Our team will contact you shortly to confirm the pickup timing.
             </p>
 
-            <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center items-center">
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-full h-12 px-6 bg-[#25D366] hover:bg-[#20BA5A] text-white font-semibold cursor-pointer shadow-md text-sm transition-all w-full sm:w-auto"
-              >
-                <MessageCircle className="h-5 w-5" />
-                Notify Admin on WhatsApp
-              </a>
+            <div className="mt-6 flex justify-center items-center">
               <Button
                 onClick={() => setBookingSuccessData(null)}
                 variant="outline"
@@ -938,7 +929,7 @@ function Index() {
                 {submitting ? "Confirming..." : hasEstimate ? `Confirm Booking — Est. ₹${Math.round(estTotal).toLocaleString("en-IN")}` : "Confirm Booking"}
               </Button>
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                You'll receive a WhatsApp confirmation within 4 hours.
+                Our team will contact you shortly.
               </p>
             </div>
           </form>
