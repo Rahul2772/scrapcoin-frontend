@@ -216,6 +216,7 @@ export type ERPDashboardData = {
   revenue: {
     revenue_this_month: number;
     weight_this_month: number;
+    weight_sold_this_month: number;
     txn_count_this_month: number;
     buy_cost_this_month: number;
     profit_loss: number;

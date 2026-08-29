@@ -286,16 +286,31 @@ function ERPDashboard() {
           </div>
         </div>
 
-        {/* 3 — Weight Collected */}
+        {/* 3 — Weight Collected & Sold */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-semibold uppercase tracking-wider">Weight Collected</span>
+          <div className="flex items-center justify-between text-muted-foreground mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider">Weight</span>
             <Scale className="h-4 w-4 text-blue-500" />
           </div>
-          <p className="mt-2 text-2xl font-bold text-foreground">
-            {revenue.weight_this_month.toLocaleString("en-IN")} kg
-          </p>
-          <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-blue-500/8 border border-blue-500/20 p-3">
+              <div className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider mb-1">Collected</div>
+              <div className="text-lg font-bold text-foreground leading-none">
+                {(revenue.weight_this_month ?? 0).toLocaleString("en-IN")}
+                <span className="text-xs font-medium text-muted-foreground ml-1">kg</span>
+              </div>
+              <div className="text-[9px] text-blue-500/70 mt-1">From customers</div>
+            </div>
+            <div className="rounded-xl bg-amber-500/8 border border-amber-500/20 p-3">
+              <div className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-1">Sold</div>
+              <div className="text-lg font-bold text-foreground leading-none">
+                {((revenue as any).weight_sold_this_month ?? 0).toLocaleString("en-IN")}
+                <span className="text-xs font-medium text-muted-foreground ml-1">kg</span>
+              </div>
+              <div className="text-[9px] text-amber-500/70 mt-1">To recyclers</div>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
             <span>{revenue.period_label ?? activePeriodLabel()}</span>
           </div>
