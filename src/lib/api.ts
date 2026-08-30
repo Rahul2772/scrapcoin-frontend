@@ -521,3 +521,73 @@ export async function clearAllERPNotifications(token?: string): Promise<{ succes
   });
 }
 
+// ── Telegram Ingested Receipts ─────────────────────────────────────────────────
+
+export type TelegramReceiptLineItem = {
+  sno?: number;
+  item_name: string;
+  qty: number;
+  unit: string;
+  rate: number;
+  amount: number;
+};
+
+export type TelegramReceipt = {
+  id: string;
+  source: "telegram";
+  status: "pending_review" | "verified" | "rejected";
+  customer_id: string | null;
+  purchase_no: string | null;
+  purchase_date: string | null;
+  customer_name: string | null;
+  customer_mobile: string | null;
+  customer_address: string | null;
+  line_items: TelegramReceiptLineItem[];
+  subtotal_amount: number | null;
+  total_amount: number | null;
+  paid_amount: number | null;
+  balance: number | null;
+  payment_mode: string | null;
+  notes: string | null;
+  raw_extracted_text: string | null;
+  pdf_storage_path: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
+  reject_reason: string | null;
+  created_at: string;
+  // joined from erp_customers
+  erp_customers?: { name: string; phone: string } | null;
+};
+
+export async function fetchTelegramReceipts(
+  token?: string,
+  status?: "pending_review" | "verified" | "rejected"
+): Promise<{ success: boolean; receipts: TelegramReceipt[] }> {
+  const qs = status ? `?status=${status}` : "";
+  return authFetch(`${API_BASE}/api/telegram/receipts${qs}`, token);
+}
+
+export async function verifyTelegramReceipt(
+  id: string,
+  token?: string
+): Promise<{ success: boolean; message: string }> {
+  return authFetch(`${API_BASE}/api/telegram/receipts/${id}/verify`, token, { method: "PATCH" });
+}
+
+export async function rejectTelegramReceipt(
+  id: string,
+  reason: string,
+  token?: string
+): Promise<{ success: boolean; message: string }> {
+  return authFetch(`${API_BASE}/api/telegram/receipts/${id}/reject`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function fetchTelegramReceiptPdfUrl(
+  id: string,
+  token?: string
+): Promise<{ success: boolean; url: string }> {
+  return authFetch(`${API_BASE}/api/telegram/receipts/${id}/pdf`, token);
+}

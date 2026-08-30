@@ -9,9 +9,14 @@ import {
   createERPPurchaseReceipt,
   updateERPPurchaseReceipt,
   deleteERPPurchaseReceipt,
+  fetchTelegramReceipts,
+  verifyTelegramReceipt,
+  rejectTelegramReceipt,
+  fetchTelegramReceiptPdfUrl,
   type ERPPurchaseReceipt,
   type ERPMaterial,
   type ERPCustomer,
+  type TelegramReceipt,
 } from "@/lib/api";
 import { groupReceipts, type GroupedERPPurchaseReceipt } from "@/lib/utils";
 import { exportReceiptsCsv } from "@/lib/exportCsv";
@@ -32,6 +37,10 @@ import {
   UserPlus,
   Check,
   Download,
+  Send,
+  ExternalLink,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -85,11 +94,23 @@ function ERPReceiptsPage() {
   const { session, profile } = useAuth();
   const isAdmin = profile?.role === "admin";
 
+  // ── Tab state: 'b2c' | 'telegram' ─────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"b2c" | "telegram">("b2c");
+
+  // ── B2C state ─────────────────────────────────────────────────────────────
   const [receipts, setReceipts] = useState<GroupedERPPurchaseReceipt[]>([]);
   const [materials, setMaterials] = useState<ERPMaterial[]>([]);
   const [customers, setCustomers] = useState<ERPCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  // ── Telegram state ────────────────────────────────────────────────────────
+  const [tgReceipts, setTgReceipts] = useState<TelegramReceipt[]>([]);
+  const [tgLoading, setTgLoading] = useState(false);
+  const [tgStatusFilter, setTgStatusFilter] = useState<"all" | "pending_review" | "verified" | "rejected">("pending_review");
+  const [tgActioning, setTgActioning] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Modals
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -181,6 +202,12 @@ function ERPReceiptsPage() {
   }, [session, search]);
 
   useEffect(() => {
+    if (activeTab === "telegram" && session?.access_token) {
+      loadTelegramReceipts();
+    }
+  }, [activeTab, tgStatusFilter, session]);
+
+  useEffect(() => {
     if (dialogOpen && session?.access_token) {
       fetchERPMaterials(session.access_token).then((res) => {
         if (res.success) setMaterials(res.materials);
@@ -205,6 +232,69 @@ function ERPReceiptsPage() {
       setLoading(false);
     }
   }
+
+  async function loadTelegramReceipts() {
+    if (!session?.access_token) return;
+    setTgLoading(true);
+    try {
+      const statusArg = tgStatusFilter === "all" ? undefined : tgStatusFilter;
+      const res = await fetchTelegramReceipts(session.access_token, statusArg);
+      if (res.success) setTgReceipts(res.receipts);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load Telegram receipts");
+    } finally {
+      setTgLoading(false);
+    }
+  }
+
+  async function handleTgVerify(id: string) {
+    if (!session?.access_token) return;
+    setTgActioning(id);
+    try {
+      const res = await verifyTelegramReceipt(id, session.access_token);
+      if (res.success) {
+        toast.success("Receipt verified ✅");
+        loadTelegramReceipts();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Verification failed");
+    } finally {
+      setTgActioning(null);
+    }
+  }
+
+  async function handleTgReject(id: string) {
+    if (!session?.access_token) return;
+    setTgActioning(id);
+    try {
+      const res = await rejectTelegramReceipt(id, rejectReason, session.access_token);
+      if (res.success) {
+        toast.success("Receipt rejected");
+        setRejectingId(null);
+        setRejectReason("");
+        loadTelegramReceipts();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Rejection failed");
+    } finally {
+      setTgActioning(null);
+    }
+  }
+
+  async function openPdf(id: string) {
+    if (!session?.access_token) return;
+    try {
+      const res = await fetchTelegramReceiptPdfUrl(id, session.access_token);
+      if (res.success && res.url) window.open(res.url, "_blank");
+      else toast.error("PDF not available");
+    } catch {
+      toast.error("Could not open PDF");
+    }
+  }
+
+  const pendingTgCount = tgReceipts.filter(
+    (r) => r.status === "pending_review" && tgStatusFilter === "pending_review"
+  ).length;
 
   function openCreate() {
     setEditingReceipt(null);
@@ -335,6 +425,38 @@ function ERPReceiptsPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+
+      {/* ── Tab switcher ────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+        <button
+          onClick={() => setActiveTab("b2c")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+            activeTab === "b2c"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+          }`}
+        >
+          <Scale className="h-3.5 w-3.5" />
+          B2C Receipts
+        </button>
+        <button
+          onClick={() => setActiveTab("telegram")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+            activeTab === "telegram"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+          }`}
+        >
+          <Send className="h-3.5 w-3.5" />
+          Telegram Receipts
+          {/* Pending badge — load count on mount */}
+          <TelegramPendingBadge token={session?.access_token} />
+        </button>
+      </div>
+
+      {/* ── B2C Tab ──────────────────────────────────────────────────────── */}
+      {activeTab === "b2c" && (
+        <>
       {/* Filtering Header */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         {/* Search */}
@@ -473,6 +595,174 @@ function ERPReceiptsPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+        </> {/* end B2C tab */}
+      )}
+
+      {/* ── Telegram Tab ─────────────────────────────────────────────────── */}
+      {activeTab === "telegram" && (
+        <div className="space-y-4">
+          {/* Status filter pills */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(["pending_review", "verified", "rejected", "all"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setTgStatusFilter(s)}
+                className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors cursor-pointer ${
+                  tgStatusFilter === s
+                    ? s === "pending_review" ? "bg-amber-500 text-white"
+                      : s === "verified"     ? "bg-emerald-500 text-white"
+                      : s === "rejected"     ? "bg-gray-400 text-white"
+                      : "bg-primary text-primary-foreground"
+                    : "bg-muted/40 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {s === "pending_review" ? "⏳ Pending" : s === "verified" ? "✅ Verified" : s === "rejected" ? "⛔ Rejected" : "All"}
+              </button>
+            ))}
+            <Button variant="ghost" size="sm" onClick={loadTelegramReceipts} disabled={tgLoading} className="ml-auto rounded-xl h-7 cursor-pointer">
+              <RotateCw className={`h-3.5 w-3.5 ${tgLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+
+          {/* Telegram receipts table */}
+          {tgLoading ? (
+            <div className="space-y-3 rounded-2xl border border-border/60 bg-card p-5">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between py-3 border-b border-border/40 last:border-0">
+                  <Skeleton className="h-5 w-48 animate-pulse" />
+                  <Skeleton className="h-5 w-24 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Receipt No.</th>
+                      <th className="px-4 py-3">Customer</th>
+                      <th className="px-4 py-3">Items</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {tgReceipts.map((r) => (
+                      <tr key={r.id} className={`transition-colors ${
+                        r.status === "pending_review" ? "bg-amber-500/5 hover:bg-amber-500/10" : "hover:bg-muted/10"
+                      }`}>
+                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                          {new Date(r.created_at).toLocaleDateString("en-IN")}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-foreground">
+                          {r.purchase_no ?? <span className="text-muted-foreground italic">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-foreground">{r.customer_name ?? "—"}</div>
+                          {r.customer_mobile && (
+                            <div className="text-[10px] text-muted-foreground">{r.customer_mobile}</div>
+                          )}
+                          {r.erp_customers && (
+                            <div className="text-[10px] text-emerald-600">✓ linked</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {r.line_items?.length > 0
+                            ? r.line_items.map((li) => li.item_name).join(", ")
+                            : <span className="text-muted-foreground italic">unreadable</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-foreground">
+                          {r.total_amount != null ? `₹${r.total_amount.toLocaleString("en-IN")}` : "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                            r.status === "pending_review"
+                              ? "bg-amber-100 text-amber-700 border-amber-200"
+                              : r.status === "verified"
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                              : "bg-gray-100 text-gray-500 border-gray-200"
+                          }`}>
+                            {r.status === "pending_review" ? "⏳ Pending" : r.status === "verified" ? "✅ Verified" : "⛔ Rejected"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* PDF preview */}
+                            {r.pdf_storage_path && (
+                              <Button
+                                variant="ghost" size="icon"
+                                onClick={() => openPdf(r.id)}
+                                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-blue-600 cursor-pointer"
+                                title="View original PDF"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {/* Verify / Reject — only for pending, only admin */}
+                            {r.status === "pending_review" && isAdmin && (
+                              <>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  onClick={() => handleTgVerify(r.id)}
+                                  disabled={tgActioning === r.id}
+                                  className="h-7 w-7 rounded-lg text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                                  title="Approve"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  onClick={() => { setRejectingId(r.id); setRejectReason(""); }}
+                                  disabled={tgActioning === r.id}
+                                  className="h-7 w-7 rounded-lg text-red-500 hover:bg-red-50 cursor-pointer"
+                                  title="Reject"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                          {/* Inline reject reason input */}
+                          {rejectingId === r.id && (
+                            <div className="mt-2 flex flex-col gap-1.5 min-w-[200px]">
+                              <Input
+                                placeholder="Reason (optional)"
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                className="h-7 text-[11px] rounded-lg"
+                                autoFocus
+                              />
+                              <div className="flex gap-1">
+                                <Button size="sm" className="h-6 text-[10px] rounded-lg flex-1 cursor-pointer" onClick={() => handleTgReject(r.id)} disabled={tgActioning === r.id}>
+                                  Confirm Reject
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-6 text-[10px] rounded-lg cursor-pointer" onClick={() => setRejectingId(null)}>
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {tgReceipts.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
+                          <Send className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                          No Telegram receipts{tgStatusFilter !== "all" ? ` with status "${tgStatusFilter}"` : ""}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -718,5 +1008,24 @@ function ERPReceiptsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Small badge showing pending Telegram receipt count — fetches independently */
+function TelegramPendingBadge({ token }: { token?: string }) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;
+    fetchTelegramReceipts(token, "pending_review")
+      .then((res) => { if (res.success) setCount(res.receipts.length); })
+      .catch(() => {});
+  }, [token]);
+
+  if (count === 0) return null;
+  return (
+    <span className="ml-0.5 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none">
+      {count}
+    </span>
   );
 }
