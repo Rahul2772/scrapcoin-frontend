@@ -62,7 +62,7 @@ function ERPDashboard() {
 
   // ── Period state ────────────────────────────────────────────────────────────
   const now = new Date();
-  const [period,          setPeriod]          = useState<DashboardPeriod>("month");
+  const [period,          setPeriod]          = useState<DashboardPeriod>("quarter");
   const [selectedYear,    setSelectedYear]    = useState(now.getFullYear());
   const [selectedMonth,   setSelectedMonth]   = useState(now.getMonth() + 1);  // 1-12
   const [selectedQuarter, setSelectedQuarter] = useState(Math.ceil((now.getMonth() + 1) / 3));
