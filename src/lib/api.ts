@@ -217,7 +217,8 @@ export type ERPDashboardData = {
     revenue_this_month: number;
     weight_this_month: number;
     weight_sold_this_month: number;
-    txn_count_this_month: number;
+    txn_count_this_month: number;        // B2B scale entries
+    receipt_count_this_month: number;    // B2C collections done
     buy_cost_this_month: number;
     profit_loss: number;
     period_label: string;

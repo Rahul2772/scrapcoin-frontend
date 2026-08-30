@@ -316,17 +316,22 @@ function ERPDashboard() {
           </div>
         </div>
 
-        {/* 4 — Scale Ticket Count */}
+        {/* 4 — Collections Done (B2C) + Scale Entries (B2B) */}
         <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-semibold uppercase tracking-wider">Scale Tickets</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Collections Done</span>
             <FileText className="h-4 w-4 text-amber-500" />
           </div>
           <p className="mt-2 text-2xl font-bold text-foreground">
-            {revenue.txn_count_this_month}
+            {revenue.receipt_count_this_month ?? 0}
           </p>
           <div className="mt-1 text-[10px] text-muted-foreground">
-            B2B transactions · {revenue.period_label ?? activePeriodLabel()}
+            B2C customer receipts · {revenue.period_label ?? activePeriodLabel()}
+          </div>
+          {/* Scale Entries (B2B) — secondary metric */}
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-amber-500/8 border border-amber-500/20 px-3 py-2">
+            <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">Scale Entries (B2B)</span>
+            <span className="text-sm font-bold text-amber-700">{revenue.txn_count_this_month ?? 0}</span>
           </div>
         </div>
 
