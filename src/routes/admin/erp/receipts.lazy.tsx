@@ -597,7 +597,7 @@ function ERPReceiptsPage() {
           </div>
         </div>
       )}
-        </> {/* end B2C tab */}
+        </>
       )}
 
       {/* ── Telegram Tab ─────────────────────────────────────────────────── */}
