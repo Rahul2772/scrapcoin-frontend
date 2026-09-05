@@ -337,8 +337,12 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
   const SUBTOTAL_H     = 26;
   const SUMMARY_H      = 118;
   const FOOTER_H       = 24;
-  const TOTAL_H = HEADER_H + DIVIDER_H + PARTY_BAR_H + PARTY_DETAIL_H +
+  const CONTENT_H = HEADER_H + DIVIDER_H + PARTY_BAR_H + PARTY_DETAIL_H +
                   TABLE_HEAD_H + ITEMS_H + SUBTOTAL_H + SUMMARY_H + FOOTER_H;
+
+  // Enforce 9:16 aspect ratio (portrait mobile friendly)
+  const MIN_H   = Math.round(W * (16 / 9));
+  const TOTAL_H = Math.max(CONTENT_H, MIN_H);
 
   // ── Canvas ────────────────────────────────────────────────────────────────
   const canvas  = document.createElement("canvas");
@@ -518,14 +522,20 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
   y += SUMMARY_H;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 7. FOOTER
+  // 7. FOOTER (Pinned to bottom)
   // ─────────────────────────────────────────────────────────────────────────
-  fill(WHITE); frect(0, y, W, FOOTER_H);
-  stroke(BORDER); ctx.lineWidth = 0.4; hline(0, y, W, y);
+  const footerY = TOTAL_H - FOOTER_H;
+  
+  // Fill any empty space between summary and footer with white background
+  if (footerY > y) {
+    fill(WHITE); frect(0, y, W, footerY - y);
+  }
+  
+  fill(WHITE); frect(0, footerY, W, FOOTER_H);
+  stroke(BORDER); ctx.lineWidth = 0.4; hline(0, footerY, W, footerY);
   fill(MID); ctx.font = "8px Arial";
   const ftxt = "Document generated using The Scrap Co. ERP System";
-  ctx.fillText(ftxt, W / 2 - ctx.measureText(ftxt).width / 2, y + 15);
-
+  ctx.fillText(ftxt, W / 2 - ctx.measureText(ftxt).width / 2, footerY + 15);
   // ─────────────────────────────────────────────────────────────────────────
   // 8. SHARE (Web Share API) → WhatsApp / Gmail / any installed app on mobile
   //    Falls back to direct file download on desktop
