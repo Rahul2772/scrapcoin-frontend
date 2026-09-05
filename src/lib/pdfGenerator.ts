@@ -430,38 +430,35 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
     </div>
   `;
 
-  // Create hidden off-screen container
+  // Create hidden off-screen container (must be in the document for html2canvas to render)
   const container = document.createElement("div");
-  container.style.cssText = "position:fixed;left:-9999px;top:-9999px;z-index:-1;";
+  container.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:620px;overflow:visible;";
   container.innerHTML = html;
   document.body.appendChild(container);
 
   try {
     const canvas = await windowObj.html2canvas(container.firstElementChild as HTMLElement, {
-      scale: 2,           // 2× for crisp retina-quality output
+      scale: 2,            // 2× for crisp retina-quality output
       useCORS: true,
+      allowTaint: true,
       backgroundColor: "#ffffff",
       logging: false,
+      windowWidth: 640,
     });
 
-    await new Promise<void>((resolve, reject) => {
-      canvas.toBlob(
-        (blob: Blob | null) => {
-          if (!blob) { reject(new Error("Failed to generate image blob")); return; }
-          const url = URL.createObjectURL(blob);
-          const a   = document.createElement("a");
-          a.href     = url;
-          a.download = `receipt-${options.docNumber}.jpg`;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
-          resolve();
-        },
-        "image/jpeg",
-        0.85   // 85% quality — good balance of size vs clarity
-      );
-    });
+    // Convert to blob synchronously-ish then trigger download
+    // We must append the anchor to the DOM before clicking — required by Chrome/Firefox
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `receipt-${options.docNumber}.jpg`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    // Small delay before cleanup so the click registers
+    await new Promise<void>((r) => setTimeout(r, 200));
+    document.body.removeChild(a);
   } finally {
     document.body.removeChild(container);
   }
 }
-
