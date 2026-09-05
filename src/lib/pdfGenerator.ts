@@ -294,17 +294,18 @@ export async function generateStandardPDF(options: PDFDocumentOptions) {
 }
 
 /**
- * Generates a receipt image matching the standard PDF layout, then shares it
- * via the Web Share API (native OS share sheet — WhatsApp, Gmail, etc. on mobile).
- * Falls back to a direct file download on desktop browsers that lack Share API.
+ * Generates a receipt image that exactly mirrors the PDF layout using the
+ * browser's native Canvas 2D API (no external libraries).
+ * On mobile: opens the native OS share sheet (WhatsApp, Gmail, etc.)
+ * On desktop: falls back to direct file download.
  */
 export async function generateReceiptImage(options: PDFDocumentOptions): Promise<void> {
-  const SCALE  = 2;     // retina multiplier
-  const W      = 560;   // logical card width — portrait A5-ish for phones
-  const PAD    = 10;    // horizontal inner padding
-  const ROW_H  = 26;    // item row height
+  const SCALE = 2;    // retina multiplier
+  const W     = 560;  // logical card width (portrait, A5-ish, phone-friendly)
+  const PAD   = 10;   // horizontal inner padding
+  const ROW_H = 26;   // item row height
 
-  // ── Colors (exact match to generateStandardPDF) ───────────────────────────
+  // ── Colors (identical to PDF) ─────────────────────────────────────────────
   const GREEN_DARK = "#3f6212";
   const GREEN_BG   = "#e2f5c8";
   const WHITE      = "#ffffff";
@@ -319,23 +320,23 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
   const balance      = options.balanceAmount !== undefined ? options.balanceAmount : 0;
   const fmt          = (n: number) => n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
   const formattedDate = options.docDate
-    ? new Date(options.docDate).toLocaleDateString("en-GB")  // dd/mm/yyyy like the PDF
+    ? new Date(options.docDate).toLocaleDateString("en-GB")
     : new Date().toLocaleDateString("en-GB");
   const docLabel  = options.docType === "PURCHASE" ? "Purchase No." :
                     options.docType === "SALE TICKET" ? "Ticket No." : "Invoice No.";
   const dateLabel = options.docType === "PURCHASE" ? "Purchase Date" : "Date";
   const amountWords = numberToWords(totalAmount);
 
-  // ── Section heights (mirrors the PDF proportions) ─────────────────────────
-  const HEADER_H      = 72;   // logo + company + doc info
-  const DIVIDER_H     = 1;
-  const PARTY_BAR_H   = 22;   // green "BILL FROM" bar
+  // ── Section heights (mirrors PDF proportions) ─────────────────────────────
+  const HEADER_H       = 72;
+  const DIVIDER_H      = 1;
+  const PARTY_BAR_H    = 22;
   const PARTY_DETAIL_H = options.partyMobile || options.partyAddress ? 52 : 36;
-  const TABLE_HEAD_H  = 26;
-  const ITEMS_H       = Math.max(options.items.length, 1) * ROW_H;
-  const SUBTOTAL_H    = 26;
-  const SUMMARY_H     = 118;  // payment + amounts block
-  const FOOTER_H      = 24;
+  const TABLE_HEAD_H   = 26;
+  const ITEMS_H        = Math.max(options.items.length, 1) * ROW_H;
+  const SUBTOTAL_H     = 26;
+  const SUMMARY_H      = 118;
+  const FOOTER_H       = 24;
   const TOTAL_H = HEADER_H + DIVIDER_H + PARTY_BAR_H + PARTY_DETAIL_H +
                   TABLE_HEAD_H + ITEMS_H + SUBTOTAL_H + SUMMARY_H + FOOTER_H;
 
@@ -346,49 +347,41 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
   const ctx     = canvas.getContext("2d")!;
   ctx.scale(SCALE, SCALE);
 
-  // White card background
-  ctx.fillStyle = WHITE;
-  ctx.fillRect(0, 0, W, TOTAL_H);
-
-  // Outer border
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth   = 0.6;
+  // White background + outer border
+  ctx.fillStyle = WHITE; ctx.fillRect(0, 0, W, TOTAL_H);
+  ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 0.6;
   ctx.strokeRect(0.3, 0.3, W - 0.6, TOTAL_H - 0.6);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Draw helpers ─────────────────────────────────────────────────────────
   const fill   = (c: string) => { ctx.fillStyle = c; };
   const stroke = (c: string) => { ctx.strokeStyle = c; };
-  const hrect  = (x: number, y: number, w: number, h: number) => ctx.fillRect(x, y, w, h);
+  const frect  = (x: number, y: number, w: number, h: number) => ctx.fillRect(x, y, w, h);
   const hline  = (x1: number, y1: number, x2: number, y2: number) => {
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
   };
   const txt  = (t: string, x: number, y: number, mw?: number) =>
     mw ? ctx.fillText(t, x, y, mw) : ctx.fillText(t, x, y);
-  const rtxt = (t: string, rx: number, y: number) => {
+  const rtxt = (t: string, rx: number, y: number) =>
     ctx.fillText(t, rx - ctx.measureText(t).width, y);
-  };
 
   let y = 0;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 1. HEADER — white background, logo left, doc info right (like the PDF)
+  // 1. HEADER — white bg, logo left | doc info right (matches PDF exactly)
   // ─────────────────────────────────────────────────────────────────────────
-  fill(WHITE); hrect(0, y, W, HEADER_H);
+  fill(WHITE); frect(0, y, W, HEADER_H);
 
-  // Logo (round-rect placeholder, replaced by actual logo if loadable)
-  const logoX = PAD + 2, logoY = y + 8, logoSize = 54;
+  // Logo — green rounded-rect placeholder
+  const logoX = PAD + 2, logoY = y + 8, logoSz = 54;
   fill(GREEN_DARK);
-  ctx.beginPath();
-  ctx.roundRect(logoX, logoY, logoSize, logoSize, 6);
-  ctx.fill();
-  // placeholder text
+  ctx.beginPath(); ctx.roundRect(logoX, logoY, logoSz, logoSz, 6); ctx.fill();
   fill(WHITE); ctx.font = "bold 8px Arial";
   ["THE", "SCRAP", "CO."].forEach((l, i) => {
     const lw = ctx.measureText(l).width;
-    ctx.fillText(l, logoX + logoSize/2 - lw/2, logoY + 16 + i * 13);
+    ctx.fillText(l, logoX + logoSz / 2 - lw / 2, logoY + 16 + i * 13);
   });
 
-  // Try real logo
+  // Attempt to draw real logo over placeholder
   try {
     const logoB64 = await loadImageBase64("/images/logo.jpg");
     if (logoB64) {
@@ -396,57 +389,42 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
       img.src = logoB64;
       await new Promise<void>((r) => { img.onload = () => r(); img.onerror = () => r(); });
       ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(logoX, logoY, logoSize, logoSize, 6);
-      ctx.clip();
-      ctx.drawImage(img, logoX, logoY, logoSize, logoSize);
+      ctx.beginPath(); ctx.roundRect(logoX, logoY, logoSz, logoSz, 6); ctx.clip();
+      ctx.drawImage(img, logoX, logoY, logoSz, logoSz);
       ctx.restore();
     }
-  } catch { /* use placeholder */ }
+  } catch { /* keep placeholder */ }
 
   // Company info (right of logo)
-  const cX = logoX + logoSize + 8;
-  fill(GREEN_DARK); ctx.font = "bold 14px Arial";
-  txt("The Scrap Co.", cX, y + 26);
+  const cX = logoX + logoSz + 8;
+  fill(GREEN_DARK); ctx.font = "bold 14px Arial"; txt("The Scrap Co.", cX, y + 26);
   fill(DARK); ctx.font = "10px Arial";
   txt("Mobile : 7292016625", cX, y + 42);
   txt("Email : bookings.scrapco@gmail.com", cX, y + 56);
 
-  // Vertical divider
+  // Vertical divider between company & doc info
   const divX = W / 2 + 10;
-  stroke(BORDER); ctx.lineWidth = 0.6;
-  hline(divX, y + 8, divX, y + HEADER_H - 8);
+  stroke(BORDER); ctx.lineWidth = 0.6; hline(divX, y + 8, divX, y + HEADER_H - 8);
 
-  // Doc type + number + date (right column)
+  // Doc type / number / date (right column)
   const rX = divX + 12;
-  fill(DARK); ctx.font = "bold 13px Arial";
-  txt(options.docType, rX, y + 22);
-  fill(MID); ctx.font = "9px Arial";
-  txt(docLabel, rX, y + 38);
-  fill(DARK); ctx.font = "bold 9px Arial";
-  rtxt(options.docNumber, W - PAD, y + 38);
-  fill(MID); ctx.font = "9px Arial";
-  txt(dateLabel, rX, y + 52);
-  fill(DARK); ctx.font = "bold 9px Arial";
-  rtxt(formattedDate, W - PAD, y + 52);
+  fill(DARK); ctx.font = "bold 13px Arial"; txt(options.docType, rX, y + 22);
+  fill(MID); ctx.font = "9px Arial"; txt(docLabel, rX, y + 38);
+  fill(DARK); ctx.font = "bold 9px Arial"; rtxt(options.docNumber, W - PAD, y + 38);
+  fill(MID); ctx.font = "9px Arial"; txt(dateLabel, rX, y + 52);
+  fill(DARK); ctx.font = "bold 9px Arial"; rtxt(formattedDate, W - PAD, y + 52);
 
   y += HEADER_H;
-
-  // Horizontal divider after header
-  stroke("#94a3b8"); ctx.lineWidth = 0.6;
-  hline(0, y, W, y);
+  stroke("#94a3b8"); ctx.lineWidth = 0.6; hline(0, y, W, y);
   y += DIVIDER_H;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 2. BILL FROM/TO — green bar + customer details
+  // 2. BILL FROM / BILL TO — green bar + customer name + mobile
   // ─────────────────────────────────────────────────────────────────────────
-  fill(GREEN_BG); hrect(0, y, W, PARTY_BAR_H);
-  stroke(BORDER); ctx.lineWidth = 0.4;
-  hline(0, y + PARTY_BAR_H, W, y + PARTY_BAR_H);
-
+  fill(GREEN_BG); frect(0, y, W, PARTY_BAR_H);
+  stroke(BORDER); ctx.lineWidth = 0.4; hline(0, y + PARTY_BAR_H, W, y + PARTY_BAR_H);
   fill(DARK); ctx.font = "bold 9px Arial";
   txt(options.partyTitle.toUpperCase(), PAD + 2, y + 15);
-
   y += PARTY_BAR_H;
 
   fill(DARK); ctx.font = "bold 13px Arial";
@@ -455,21 +433,20 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
   let py = y + 32;
   if (options.partyMobile) { txt(`Mobile : ${options.partyMobile}`, PAD + 2, py); py += 14; }
   if (options.partyAddress) { txt(options.partyAddress, PAD + 2, py, W - PAD * 3); }
-
   y += PARTY_DETAIL_H;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 3. ITEMS TABLE HEADER
+  // 3. TABLE HEADER
   // ─────────────────────────────────────────────────────────────────────────
-  fill(GREEN_BG); hrect(0, y, W, TABLE_HEAD_H);
+  fill(GREEN_BG); frect(0, y, W, TABLE_HEAD_H);
   stroke(BORDER); ctx.lineWidth = 0.5;
   hline(0, y, W, y); hline(0, y + TABLE_HEAD_H, W, y + TABLE_HEAD_H);
 
-  const C_SNO    = PAD + 2;
-  const C_ITEM   = C_SNO + 28;
-  const C_QTY    = W - 185;
-  const C_RATE   = W - 100;
-  const C_AMT    = W - PAD;
+  const C_SNO  = PAD + 2;
+  const C_ITEM = C_SNO + 28;
+  const C_QTY  = W - 185;
+  const C_RATE = W - 100;
+  const C_AMT  = W - PAD;
 
   fill(DARK); ctx.font = "bold 9px Arial";
   txt("S.NO.", C_SNO, y + 17);
@@ -477,16 +454,14 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
   rtxt("QTY.", C_QTY, y + 17);
   rtxt("RATE", C_RATE, y + 17);
   rtxt("AMOUNT", C_AMT, y + 17);
-
   y += TABLE_HEAD_H;
 
   // ─────────────────────────────────────────────────────────────────────────
   // 4. ITEM ROWS
   // ─────────────────────────────────────────────────────────────────────────
   options.items.forEach((item, idx) => {
-    fill(idx % 2 === 0 ? WHITE : "#f7fbf0"); hrect(0, y, W, ROW_H);
+    fill(idx % 2 === 0 ? WHITE : "#f7fbf0"); frect(0, y, W, ROW_H);
     stroke(BORDER); ctx.lineWidth = 0.3; hline(0, y + ROW_H, W, y + ROW_H);
-
     fill(DARK);
     ctx.font = "9px Arial"; txt(String(idx + 1), C_SNO, y + 17);
     ctx.font = "bold 9px Arial"; txt(item.name.toUpperCase(), C_ITEM, y + 17, C_QTY - C_ITEM - 6);
@@ -494,315 +469,93 @@ export async function generateReceiptImage(options: PDFDocumentOptions): Promise
     rtxt(`${fmt(item.qty)} ${item.unit.toUpperCase()}`, C_QTY, y + 17);
     rtxt(fmt(item.rate), C_RATE, y + 17);
     ctx.font = "bold 9px Arial"; rtxt(fmt(item.amount), C_AMT, y + 17);
-
     y += ROW_H;
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 5. SUBTOTAL BAR
+  // 5. SUBTOTAL
   // ─────────────────────────────────────────────────────────────────────────
-  fill(GREEN_BG); hrect(0, y, W, SUBTOTAL_H);
+  fill(GREEN_BG); frect(0, y, W, SUBTOTAL_H);
   stroke(BORDER); ctx.lineWidth = 0.5;
   hline(0, y, W, y); hline(0, y + SUBTOTAL_H, W, y + SUBTOTAL_H);
-
   fill(DARK); ctx.font = "bold 10px Arial";
   txt("SUBTOTAL", C_ITEM, y + 17);
-  rtxt(`${fmt(totalQty)}`, C_QTY, y + 17);
+  rtxt(fmt(totalQty), C_QTY, y + 17);
   rtxt(`Rs. ${fmt(totalAmount)}`, C_AMT, y + 17);
-
   y += SUBTOTAL_H;
 
   // ─────────────────────────────────────────────────────────────────────────
   // 6. SUMMARY — payment left | amounts right (two-column like the PDF)
   // ─────────────────────────────────────────────────────────────────────────
-  fill(WHITE); hrect(0, y, W, SUMMARY_H);
-  stroke(BORDER); ctx.lineWidth = 0.4;
-  hline(0, y + SUMMARY_H, W, y + SUMMARY_H);
+  fill(WHITE); frect(0, y, W, SUMMARY_H);
+  stroke(BORDER); ctx.lineWidth = 0.4; hline(0, y + SUMMARY_H, W, y + SUMMARY_H);
 
-  const midX  = W / 2 - 10;
-  hline(midX, y, midX, y + SUMMARY_H);  // vertical divider
+  const midX = W / 2 - 10;
+  hline(midX, y, midX, y + SUMMARY_H);
 
   // Left: payment mode + notes
   fill(MID); ctx.font = "bold 8px Arial"; txt("Payment Mode:", PAD + 2, y + 16);
-  fill(DARK); ctx.font = "bold 11px Arial"; txt((options.paymentMethod || "CASH").toUpperCase(), PAD + 2, y + 32);
+  fill(DARK); ctx.font = "bold 11px Arial";
+  txt((options.paymentMethod || "CASH").toUpperCase(), PAD + 2, y + 32);
   if (options.notes) {
     fill(MID); ctx.font = "8px Arial";
     txt(`Notes: ${options.notes}`, PAD + 2, y + 48, midX - PAD - 6);
   }
 
   // Right: amounts
-  const rXs   = midX + 8;
-  const rXe   = W - PAD;
-
+  const rXs = midX + 8, rXe = W - PAD;
   const arow = (label: string, val: string, vy: number, valColor = DARK) => {
     fill(DARK); ctx.font = "9px Arial"; txt(label, rXs, vy);
     fill(valColor); ctx.font = "bold 9px Arial"; rtxt(val, rXe, vy);
   };
+  arow("Total Amount",    `Rs. ${fmt(totalAmount)}`, y + 16);
+  arow("Received Amount", `Rs. ${fmt(paid)}`,        y + 32, "#16a34a");
+  arow("Balance",         `Rs. ${fmt(balance)}`,     y + 48, balance > 0 ? "#dc2626" : DARK);
 
-  arow("Total Amount",  `Rs. ${fmt(totalAmount)}`, y + 16);
-  arow("Received Amount", `Rs. ${fmt(paid)}`,       y + 32, "#16a34a");
-  arow("Balance",         `Rs. ${fmt(balance)}`,    y + 48, balance > 0 ? "#dc2626" : DARK);
-
-  stroke(BORDER); ctx.lineWidth = 0.3;
-  hline(rXs, y + 56, rXe, y + 56);
-
+  stroke(BORDER); ctx.lineWidth = 0.3; hline(rXs, y + 56, rXe, y + 56);
   fill(MID); ctx.font = "bold 8px Arial"; txt("Total Amount (in words)", rXs, y + 68);
   fill(DARK); ctx.font = "8px Arial"; txt(amountWords, rXs, y + 82, rXe - rXs);
-
   y += SUMMARY_H;
 
   // ─────────────────────────────────────────────────────────────────────────
   // 7. FOOTER
   // ─────────────────────────────────────────────────────────────────────────
-  fill(WHITE); hrect(0, y, W, FOOTER_H);
+  fill(WHITE); frect(0, y, W, FOOTER_H);
   stroke(BORDER); ctx.lineWidth = 0.4; hline(0, y, W, y);
   fill(MID); ctx.font = "8px Arial";
   const ftxt = "Document generated using The Scrap Co. ERP System";
   ctx.fillText(ftxt, W / 2 - ctx.measureText(ftxt).width / 2, y + 15);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 8. SHARE (Web Share API) or DOWNLOAD fallback
+  // 8. SHARE (Web Share API) → WhatsApp / Gmail / any installed app on mobile
+  //    Falls back to direct file download on desktop
   // ─────────────────────────────────────────────────────────────────────────
-  const blob = await new Promise<Blob>((resolve, reject) => {
+  const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob(
       (b) => b ? resolve(b) : reject(new Error("Canvas export failed")),
-      "image/jpeg",
-      0.88
-    );
-  });
+      "image/jpeg", 0.88
+    )
+  );
 
   const filename = `receipt-${options.docNumber}.jpg`;
   const file = new File([blob], filename, { type: "image/jpeg" });
-
-  // Try native share sheet (Android/iOS — shows WhatsApp, Gmail, etc.)
   const nav = navigator as any;
+
   if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
+    // Mobile: native share sheet — WhatsApp, Gmail, Drive, etc.
     await nav.share({
       title: `The Scrap Co. — Receipt ${options.docNumber}`,
-      text: `Receipt ${options.docNumber} | Total: ₹${fmt(totalAmount)} | ${options.partyName || "Walk-in Customer"}`,
+      text: `Receipt ${options.docNumber} | Total: Rs. ${fmt(totalAmount)} | ${options.partyName || "Walk-in Customer"}`,
       files: [file],
     });
   } else {
     // Desktop fallback — download directly
     const url = URL.createObjectURL(blob);
     const a   = document.createElement("a");
-    a.href    = url;
-    a.download = filename;
-    a.style.display = "none";
+    a.href = url; a.download = filename; a.style.display = "none";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 }
-
-
-
-  const totalQty    = options.items.reduce((s, i) => s + i.qty, 0);
-  const paid        = options.paidAmount !== undefined ? options.paidAmount : totalAmount;
-  const balance     = options.balanceAmount !== undefined ? options.balanceAmount : 0;
-  const fmt         = (n: number) => n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
-  const formattedDate = options.docDate
-    ? new Date(options.docDate).toLocaleDateString("en-IN")
-    : new Date().toLocaleDateString("en-IN");
-  const docLabel  = options.docType === "PURCHASE" ? "Purchase No." :
-                    options.docType === "SALE TICKET" ? "Ticket No." : "Invoice No.";
-  const dateLabel = options.docType === "PURCHASE" ? "Purchase Date" : "Date";
-  const amountWords = numberToWords(totalAmount);
-
-  // ── Height calculation ────────────────────────────────────────────────────
-  const HEADER_H   = 80;
-  const PARTY_H    = options.partyMobile || options.partyAddress ? 72 : 52;
-  const TABLE_HEADER_H = 30;
-  const ITEMS_H    = options.items.length * ROW_H;
-  const SUBTOTAL_H = 30;
-  const SUMMARY_H  = 130;
-  const FOOTER_H   = 30;
-  const TOTAL_H    = HEADER_H + PARTY_H + TABLE_HEADER_H + ITEMS_H + SUBTOTAL_H + SUMMARY_H + FOOTER_H;
-
-  // ── Canvas setup ─────────────────────────────────────────────────────────
-  const canvas  = document.createElement("canvas");
-  canvas.width  = W * SCALE;
-  canvas.height = TOTAL_H * SCALE;
-  const ctx     = canvas.getContext("2d")!;
-  ctx.scale(SCALE, SCALE);
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  const fill  = (color: string) => { ctx.fillStyle = color; };
-  const stroke = (color: string) => { ctx.strokeStyle = color; };
-  const rect  = (x: number, y: number, w: number, h: number) => ctx.fillRect(x, y, w, h);
-  const line  = (x1: number, y1: number, x2: number, y2: number) => {
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-  };
-  const text  = (t: string, x: number, y: number, maxW?: number) => {
-    if (maxW) ctx.fillText(t, x, y, maxW); else ctx.fillText(t, x, y);
-  };
-  const rtext = (t: string, rightX: number, y: number) => {
-    const w = ctx.measureText(t).width;
-    ctx.fillText(t, rightX - w, y);
-  };
-
-  let y = 0;
-
-  // ── 1. Header bar (green) ─────────────────────────────────────────────────
-  fill(GREEN_DARK); rect(0, y, W, HEADER_H);
-
-  // Logo placeholder circle
-  fill("rgba(255,255,255,0.18)"); ctx.beginPath(); ctx.arc(PAD + 24, y + 40, 22, 0, Math.PI * 2); ctx.fill();
-  fill(WHITE);
-  ctx.font = "bold 10px Arial";
-  const logoLines = ["THE", "SCRAP", "CO."];
-  logoLines.forEach((l, i) => { const lw = ctx.measureText(l).width; ctx.fillText(l, PAD + 24 - lw/2, y + 26 + i * 14); });
-
-  // Try to draw the actual logo image
-  try {
-    const logoImg = await loadImageBase64("/images/logo.jpg");
-    if (logoImg) {
-      const img = new Image();
-      img.src = logoImg;
-      await new Promise<void>((r) => { img.onload = () => r(); img.onerror = () => r(); });
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(PAD + 24, y + 40, 22, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(img, PAD + 2, y + 18, 44, 44);
-      ctx.restore();
-    }
-  } catch { /* skip logo on error */ }
-
-  fill(WHITE);
-  ctx.font = "bold 18px Arial"; text("The Scrap Co.", PAD + 52, y + 30);
-  ctx.font = "11px Arial"; fill("rgba(255,255,255,0.82)");
-  text("Mobile : 7292016625", PAD + 52, y + 48);
-  text("bookings.scrapco@gmail.com", PAD + 52, y + 63);
-
-  // Header right — doc info
-  fill("rgba(255,255,255,0.72)"); ctx.font = "11px Arial";
-  rtext(options.docType, W - PAD, y + 22);
-  text(`${docLabel}:`, W - 160, y + 40);
-  fill(WHITE); ctx.font = "bold 11px Arial"; rtext(options.docNumber, W - PAD, y + 40);
-  fill("rgba(255,255,255,0.72)"); ctx.font = "11px Arial";
-  text(`${dateLabel}:`, W - 160, y + 56);
-  fill(WHITE); ctx.font = "bold 11px Arial"; rtext(formattedDate, W - PAD, y + 56);
-
-  y += HEADER_H;
-
-  // ── 2. Party bar ──────────────────────────────────────────────────────────
-  fill(GREEN_BG); rect(0, y, W, PARTY_H);
-  stroke(BORDER); ctx.lineWidth = 0.5; line(0, y + PARTY_H, W, y + PARTY_H);
-
-  fill(GREEN_DARK); ctx.font = "bold 10px Arial";
-  text(options.partyTitle.toUpperCase(), PAD, y + 18);
-
-  fill(DARK); ctx.font = "bold 15px Arial";
-  text(options.partyName || "Walk-in Customer", PAD, y + 36);
-
-  ctx.font = "12px Arial"; fill(MID);
-  let partyY = y + 52;
-  if (options.partyMobile) { text(`Mobile : ${options.partyMobile}`, PAD, partyY); partyY += 16; }
-  if (options.partyAddress) { text(options.partyAddress, PAD, partyY, W - PAD * 2); }
-
-  y += PARTY_H;
-
-  // ── 3. Table header ───────────────────────────────────────────────────────
-  fill(GREEN_BG); rect(0, y, W, TABLE_HEADER_H);
-  stroke(BORDER); ctx.lineWidth = 0.5;
-  line(0, y, W, y); line(0, y + TABLE_HEADER_H, W, y + TABLE_HEADER_H);
-
-  fill(DARK); ctx.font = "bold 11px Arial";
-  const COL_ITEM   = PAD + 30;
-  const COL_QTY    = W - 200;
-  const COL_RATE   = W - 110;
-  const COL_AMOUNT = W - PAD;
-
-  text("S.NO.", PAD, y + 19);
-  text("ITEMS", COL_ITEM, y + 19);
-  rtext("QTY.", COL_QTY, y + 19);
-  rtext("RATE", COL_RATE, y + 19);
-  rtext("AMOUNT", COL_AMOUNT, y + 19);
-
-  y += TABLE_HEADER_H;
-
-  // ── 4. Item rows ──────────────────────────────────────────────────────────
-  options.items.forEach((item, idx) => {
-    const rowBg = idx % 2 === 0 ? WHITE : "#f8faf5";
-    fill(rowBg); rect(0, y, W, ROW_H);
-    stroke(BORDER); ctx.lineWidth = 0.3; line(0, y + ROW_H, W, y + ROW_H);
-
-    fill(DARK); ctx.font = "12px Arial";
-    text(String(idx + 1), PAD, y + 18);
-    ctx.font = "bold 12px Arial";
-    text(item.name.toUpperCase(), COL_ITEM, y + 18, COL_QTY - COL_ITEM - 10);
-    ctx.font = "12px Arial";
-    rtext(`${fmt(item.qty)} ${item.unit.toUpperCase()}`, COL_QTY, y + 18);
-    rtext(fmt(item.rate), COL_RATE, y + 18);
-    ctx.font = "bold 12px Arial";
-    rtext(fmt(item.amount), COL_AMOUNT, y + 18);
-
-    y += ROW_H;
-  });
-
-  // ── 5. Subtotal row ───────────────────────────────────────────────────────
-  fill(GREEN_BG); rect(0, y, W, SUBTOTAL_H);
-  stroke(BORDER); ctx.lineWidth = 0.5; line(0, y, W, y); line(0, y + SUBTOTAL_H, W, y + SUBTOTAL_H);
-
-  fill(DARK); ctx.font = "bold 13px Arial";
-  text("SUBTOTAL", COL_ITEM, y + 19);
-  rtext(`${fmt(totalQty)} KGS`, COL_QTY, y + 19);
-  rtext(`₹ ${fmt(totalAmount)}`, COL_AMOUNT, y + 19);
-
-  y += SUBTOTAL_H;
-
-  // ── 6. Summary section ────────────────────────────────────────────────────
-  const midX = W / 2;
-  fill(WHITE); rect(0, y, W, SUMMARY_H);
-  stroke(BORDER); ctx.lineWidth = 0.5;
-  line(midX, y, midX, y + SUMMARY_H);
-  line(0, y + SUMMARY_H, W, y + SUMMARY_H);
-
-  // Left — payment
-  fill(MID); ctx.font = "bold 10px Arial"; text("PAYMENT MODE", PAD, y + 20);
-  fill(DARK); ctx.font = "bold 13px Arial"; text((options.paymentMethod || "CASH").toUpperCase(), PAD, y + 38);
-  if (options.notes) {
-    fill(MID); ctx.font = "italic 10px Arial";
-    text(`Notes: ${options.notes}`, PAD, y + 56, midX - PAD * 2);
-  }
-
-  // Right — amounts
-  const rPAD = midX + 16;
-  const rRight = W - PAD;
-
-  const amountRow = (label: string, value: string, vy: number, color = DARK) => {
-    fill(DARK); ctx.font = "bold 12px Arial"; text(label, rPAD, vy);
-    fill(color); ctx.font = "bold 12px Arial"; rtext(value, rRight, vy);
-  };
-
-  amountRow("Total Amount", `₹ ${fmt(totalAmount)}`, y + 22);
-  amountRow("Paid Amount",  `₹ ${fmt(paid)}`, y + 42, "#16a34a");
-  amountRow("Balance",      `₹ ${fmt(balance)}`, y + 62, balance > 0 ? "#dc2626" : DARK);
-
-  stroke(BORDER); ctx.lineWidth = 0.3; line(rPAD, y + 70, rRight, y + 70);
-  fill(MID); ctx.font = "italic 10px Arial";
-  text(amountWords, rPAD, y + 84, rRight - rPAD);
-
-  y += SUMMARY_H;
-
-  // ── 7. Footer ─────────────────────────────────────────────────────────────
-  fill(LIGHT_BG); rect(0, y, W, FOOTER_H);
-  stroke(BORDER); ctx.lineWidth = 0.5; line(0, y, W, y);
-  fill(MID); ctx.font = "10px Arial";
-  const footerTxt = "Generated using The Scrap Co. ERP System";
-  const ftw = ctx.measureText(footerTxt).width;
-  ctx.fillText(footerTxt, W / 2 - ftw / 2, y + 19);
-
-  // ── Download ──────────────────────────────────────────────────────────────
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = `receipt-${options.docNumber}.jpg`;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
-
