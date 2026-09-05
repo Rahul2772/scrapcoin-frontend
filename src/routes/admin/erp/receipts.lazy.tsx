@@ -41,6 +41,7 @@ import {
   ExternalLink,
   CheckCircle,
   XCircle,
+  ImageDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -54,7 +55,7 @@ export const Route = createLazyFileRoute("/admin/erp/receipts")({
   component: ERPReceiptsPage,
 });
 
-import { generateStandardPDF } from "@/lib/pdfGenerator";
+import { generateStandardPDF, generateReceiptImage } from "@/lib/pdfGenerator";
 
 // PDF Generator for B2C Receipts using standard format
 async function generateReceiptPDF(r: GroupedERPPurchaseReceipt) {
@@ -69,6 +70,40 @@ async function generateReceiptPDF(r: GroupedERPPurchaseReceipt) {
   ];
 
   await generateStandardPDF({
+    docType: "PURCHASE",
+    docNumber: r.receipt_number,
+    docDate: r.created_at,
+    partyTitle: "BILL FROM",
+    partyName: r.customer_name || "Walk-in Customer",
+    partyMobile: r.customer_phone || "",
+    paymentMethod: r.payment_method || "CASH",
+    paidAmount: r.total_amount,
+    balanceAmount: 0,
+    notes: r.notes || undefined,
+    items: rawItems.map((item, idx) => ({
+      sNo: idx + 1,
+      name: item.material_name,
+      qty: item.weight,
+      unit: item.unit || "KGS",
+      rate: item.price_per_unit,
+      amount: item.total_amount,
+    })),
+  });
+}
+
+// Image export wrapper — same PDFDocumentOptions mapping, downloads as JPEG for WhatsApp sharing
+async function generateReceiptImageFile(r: GroupedERPPurchaseReceipt) {
+  const rawItems = r.materials || [
+    {
+      material_name: r.material_name,
+      weight: r.weight,
+      unit: r.unit,
+      price_per_unit: r.price_per_unit,
+      total_amount: r.total_amount,
+    },
+  ];
+
+  await generateReceiptImage({
     docType: "PURCHASE",
     docNumber: r.receipt_number,
     docDate: r.created_at,
@@ -560,6 +595,21 @@ function ERPReceiptsPage() {
                           title="Print Receipt"
                         >
                           <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            toast.promise(generateReceiptImageFile(r), {
+                              loading: "Generating image…",
+                              success: "Receipt image downloaded!",
+                              error: (e) => `Image failed: ${e?.message ?? e}`,
+                            });
+                          }}
+                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-emerald-600 cursor-pointer"
+                          title="Download as Image (WhatsApp)"
+                        >
+                          <ImageDown className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"

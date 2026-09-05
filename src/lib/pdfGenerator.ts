@@ -292,3 +292,176 @@ export async function generateStandardPDF(options: PDFDocumentOptions) {
   const pdfBlob = doc.output("bloburl");
   window.open(pdfBlob, "_blank");
 }
+
+/**
+ * Generates a lightweight JPEG image of a receipt card, suitable for sharing
+ * via WhatsApp. Uses html2canvas to rasterize an off-screen HTML template
+ * that mirrors the PDF design (same green/dark color scheme, same data fields).
+ * Downloads directly as a file (no new tab) for easy gallery saving.
+ */
+export async function generateReceiptImage(options: PDFDocumentOptions): Promise<void> {
+  const windowObj = window as any;
+
+  // Load html2canvas dynamically (same pattern as jsPDF loading above)
+  if (!windowObj.html2canvas) {
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Failed to load html2canvas library"));
+      document.head.appendChild(script);
+    });
+  }
+
+  const totalAmount = options.items.reduce((s, i) => s + i.amount, 0);
+  const totalQty    = options.items.reduce((s, i) => s + i.qty, 0);
+  const paid        = options.paidAmount !== undefined ? options.paidAmount : totalAmount;
+  const balance     = options.balanceAmount !== undefined ? options.balanceAmount : 0;
+  const formattedDate = options.docDate
+    ? new Date(options.docDate).toLocaleDateString("en-IN")
+    : new Date().toLocaleDateString("en-IN");
+
+  const GREEN_DARK = "#3f6212";
+  const GREEN_BG   = "#e2f5c8";
+  const DARK       = "#0f172a";
+  const BORDER     = "#47556966";
+
+  // Build the item rows HTML
+  const itemRows = options.items.map((item, idx) => `
+    <tr style="border-bottom:1px solid ${BORDER};">
+      <td style="padding:8px 10px;color:${DARK};font-size:13px;">${idx + 1}</td>
+      <td style="padding:8px 10px;color:${DARK};font-size:13px;font-weight:600;">${item.name.toUpperCase()}</td>
+      <td style="padding:8px 10px;color:${DARK};font-size:13px;text-align:right;">${item.qty} ${item.unit.toUpperCase()}</td>
+      <td style="padding:8px 10px;color:${DARK};font-size:13px;text-align:right;">${Number(item.rate).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
+      <td style="padding:8px 10px;color:${DARK};font-size:13px;text-align:right;font-weight:600;">${Number(item.amount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
+    </tr>
+  `).join("");
+
+  const docLabel = options.docType === "PURCHASE" ? "Purchase No." :
+                   options.docType === "SALE TICKET" ? "Ticket No." : "Invoice No.";
+  const dateLabel = options.docType === "PURCHASE" ? "Purchase Date" : "Date";
+  const amountWords = numberToWords(totalAmount);
+
+  const html = `
+    <div style="
+      width:600px;
+      font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+      background:#ffffff;
+      border:1.5px solid #cbd5e1;
+      border-radius:12px;
+      overflow:hidden;
+      box-shadow:0 4px 24px rgba(0,0,0,0.10);
+    ">
+      <!-- Header -->
+      <div style="background:${GREEN_DARK};padding:18px 20px;display:flex;align-items:center;gap:16px;">
+        <img src="/images/logo.jpg" width="56" height="56"
+             style="border-radius:10px;object-fit:cover;border:2px solid rgba(255,255,255,0.25);"
+             onerror="this.style.display='none'" />
+        <div>
+          <div style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">The Scrap Co.</div>
+          <div style="color:rgba(255,255,255,0.80);font-size:12px;margin-top:2px;">Mobile : 7292016625 &nbsp;|&nbsp; bookings.scrapco@gmail.com</div>
+        </div>
+        <div style="margin-left:auto;text-align:right;">
+          <div style="color:#fff;font-size:13px;font-weight:600;opacity:0.85;">${options.docType}</div>
+          <div style="color:rgba(255,255,255,0.70);font-size:11px;margin-top:4px;">${docLabel}: <b style="color:#fff;">${options.docNumber}</b></div>
+          <div style="color:rgba(255,255,255,0.70);font-size:11px;margin-top:2px;">${dateLabel}: <b style="color:#fff;">${formattedDate}</b></div>
+        </div>
+      </div>
+
+      <!-- Bill From/To -->
+      <div style="background:${GREEN_BG};padding:10px 20px;border-bottom:1px solid ${BORDER};">
+        <div style="color:${GREEN_DARK};font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${options.partyTitle}</div>
+        <div style="color:${DARK};font-size:15px;font-weight:700;margin-top:3px;">${options.partyName || "Walk-in Customer"}</div>
+        ${options.partyMobile ? `<div style="color:#475569;font-size:12px;margin-top:2px;">Mobile : ${options.partyMobile}</div>` : ""}
+        ${options.partyAddress ? `<div style="color:#475569;font-size:12px;margin-top:2px;">${options.partyAddress}</div>` : ""}
+      </div>
+
+      <!-- Items Table -->
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:${GREEN_BG};border-bottom:1.5px solid ${GREEN_DARK}33;">
+            <th style="padding:9px 10px;text-align:left;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">S.NO.</th>
+            <th style="padding:9px 10px;text-align:left;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">ITEMS</th>
+            <th style="padding:9px 10px;text-align:right;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">QTY.</th>
+            <th style="padding:9px 10px;text-align:right;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">RATE</th>
+            <th style="padding:9px 10px;text-align:right;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">AMOUNT</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+        <!-- Subtotal Row -->
+        <tr style="background:${GREEN_BG};border-top:1.5px solid ${GREEN_DARK}33;">
+          <td colspan="2" style="padding:9px 10px;color:${DARK};font-size:13px;font-weight:700;">SUBTOTAL</td>
+          <td style="padding:9px 10px;color:${DARK};font-size:13px;font-weight:700;text-align:right;">${Number(totalQty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
+          <td></td>
+          <td style="padding:9px 10px;color:${DARK};font-size:13px;font-weight:700;text-align:right;">₹ ${Number(totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
+        </tr>
+      </table>
+
+      <!-- Summary Footer -->
+      <div style="display:flex;border-top:1.5px solid ${BORDER};">
+        <!-- Left: Payment -->
+        <div style="flex:1;padding:14px 16px;border-right:1px solid ${BORDER};">
+          <div style="color:#64748b;font-size:11px;font-weight:600;margin-bottom:4px;">PAYMENT MODE</div>
+          <div style="color:${DARK};font-size:13px;font-weight:700;">${(options.paymentMethod || "CASH").toUpperCase()}</div>
+          ${options.notes ? `<div style="color:#64748b;font-size:11px;margin-top:8px;font-style:italic;">Notes: ${options.notes}</div>` : ""}
+        </div>
+        <!-- Right: Amounts -->
+        <div style="flex:1;padding:14px 16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+            <span style="color:${DARK};font-size:12px;font-weight:600;">Total Amount</span>
+            <span style="color:${DARK};font-size:12px;font-weight:700;">₹ ${Number(totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+            <span style="color:${DARK};font-size:12px;font-weight:600;">Paid Amount</span>
+            <span style="color:#16a34a;font-size:12px;font-weight:700;">₹ ${Number(paid).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+            <span style="color:${DARK};font-size:12px;font-weight:600;">Balance</span>
+            <span style="color:${balance > 0 ? "#dc2626" : DARK};font-size:12px;font-weight:700;">₹ ${Number(balance).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+          </div>
+          <div style="font-size:10px;color:#64748b;font-style:italic;">${amountWords}</div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:8px 16px;text-align:center;border-top:1px solid ${BORDER};">
+        <div style="color:#94a3b8;font-size:10px;">Generated using The Scrap Co. ERP System</div>
+      </div>
+    </div>
+  `;
+
+  // Create hidden off-screen container
+  const container = document.createElement("div");
+  container.style.cssText = "position:fixed;left:-9999px;top:-9999px;z-index:-1;";
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  try {
+    const canvas = await windowObj.html2canvas(container.firstElementChild as HTMLElement, {
+      scale: 2,           // 2× for crisp retina-quality output
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      canvas.toBlob(
+        (blob: Blob | null) => {
+          if (!blob) { reject(new Error("Failed to generate image blob")); return; }
+          const url = URL.createObjectURL(blob);
+          const a   = document.createElement("a");
+          a.href     = url;
+          a.download = `receipt-${options.docNumber}.jpg`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          resolve();
+        },
+        "image/jpeg",
+        0.85   // 85% quality — good balance of size vs clarity
+      );
+    });
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
