@@ -294,171 +294,231 @@ export async function generateStandardPDF(options: PDFDocumentOptions) {
 }
 
 /**
- * Generates a lightweight JPEG image of a receipt card, suitable for sharing
- * via WhatsApp. Uses html2canvas to rasterize an off-screen HTML template
- * that mirrors the PDF design (same green/dark color scheme, same data fields).
- * Downloads directly as a file (no new tab) for easy gallery saving.
+ * Generates a lightweight JPEG image of a receipt card using the browser's
+ * native Canvas 2D API — no external libraries needed. Downloads directly.
  */
 export async function generateReceiptImage(options: PDFDocumentOptions): Promise<void> {
-  const windowObj = window as any;
+  const SCALE   = 2;      // retina multiplier
+  const W       = 600;    // logical card width in px
+  const PAD     = 20;     // horizontal padding
+  const ROW_H   = 28;     // item row height
 
-  // Load html2canvas dynamically (same pattern as jsPDF loading above)
-  if (!windowObj.html2canvas) {
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load html2canvas library"));
-      document.head.appendChild(script);
-    });
-  }
+  // ── Colors ────────────────────────────────────────────────────────────────
+  const GREEN_DARK = "#3f6212";
+  const GREEN_BG   = "#e2f5c8";
+  const WHITE      = "#ffffff";
+  const DARK       = "#0f172a";
+  const MID        = "#475569";
+  const LIGHT_BG   = "#f8fafc";
+  const BORDER     = "#e2e8f0";
 
+  // ── Computed values ───────────────────────────────────────────────────────
   const totalAmount = options.items.reduce((s, i) => s + i.amount, 0);
   const totalQty    = options.items.reduce((s, i) => s + i.qty, 0);
   const paid        = options.paidAmount !== undefined ? options.paidAmount : totalAmount;
   const balance     = options.balanceAmount !== undefined ? options.balanceAmount : 0;
+  const fmt         = (n: number) => n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
   const formattedDate = options.docDate
     ? new Date(options.docDate).toLocaleDateString("en-IN")
     : new Date().toLocaleDateString("en-IN");
-
-  const GREEN_DARK = "#3f6212";
-  const GREEN_BG   = "#e2f5c8";
-  const DARK       = "#0f172a";
-  const BORDER     = "#47556966";
-
-  // Build the item rows HTML
-  const itemRows = options.items.map((item, idx) => `
-    <tr style="border-bottom:1px solid ${BORDER};">
-      <td style="padding:8px 10px;color:${DARK};font-size:13px;">${idx + 1}</td>
-      <td style="padding:8px 10px;color:${DARK};font-size:13px;font-weight:600;">${item.name.toUpperCase()}</td>
-      <td style="padding:8px 10px;color:${DARK};font-size:13px;text-align:right;">${item.qty} ${item.unit.toUpperCase()}</td>
-      <td style="padding:8px 10px;color:${DARK};font-size:13px;text-align:right;">${Number(item.rate).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
-      <td style="padding:8px 10px;color:${DARK};font-size:13px;text-align:right;font-weight:600;">${Number(item.amount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
-    </tr>
-  `).join("");
-
-  const docLabel = options.docType === "PURCHASE" ? "Purchase No." :
-                   options.docType === "SALE TICKET" ? "Ticket No." : "Invoice No.";
+  const docLabel  = options.docType === "PURCHASE" ? "Purchase No." :
+                    options.docType === "SALE TICKET" ? "Ticket No." : "Invoice No.";
   const dateLabel = options.docType === "PURCHASE" ? "Purchase Date" : "Date";
   const amountWords = numberToWords(totalAmount);
 
-  const html = `
-    <div style="
-      width:600px;
-      font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
-      background:#ffffff;
-      border:1.5px solid #cbd5e1;
-      border-radius:12px;
-      overflow:hidden;
-      box-shadow:0 4px 24px rgba(0,0,0,0.10);
-    ">
-      <!-- Header -->
-      <div style="background:${GREEN_DARK};padding:18px 20px;display:flex;align-items:center;gap:16px;">
-        <img src="/images/logo.jpg" width="56" height="56"
-             style="border-radius:10px;object-fit:cover;border:2px solid rgba(255,255,255,0.25);"
-             onerror="this.style.display='none'" />
-        <div>
-          <div style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">The Scrap Co.</div>
-          <div style="color:rgba(255,255,255,0.80);font-size:12px;margin-top:2px;">Mobile : 7292016625 &nbsp;|&nbsp; bookings.scrapco@gmail.com</div>
-        </div>
-        <div style="margin-left:auto;text-align:right;">
-          <div style="color:#fff;font-size:13px;font-weight:600;opacity:0.85;">${options.docType}</div>
-          <div style="color:rgba(255,255,255,0.70);font-size:11px;margin-top:4px;">${docLabel}: <b style="color:#fff;">${options.docNumber}</b></div>
-          <div style="color:rgba(255,255,255,0.70);font-size:11px;margin-top:2px;">${dateLabel}: <b style="color:#fff;">${formattedDate}</b></div>
-        </div>
-      </div>
+  // ── Height calculation ────────────────────────────────────────────────────
+  const HEADER_H   = 80;
+  const PARTY_H    = options.partyMobile || options.partyAddress ? 72 : 52;
+  const TABLE_HEADER_H = 30;
+  const ITEMS_H    = options.items.length * ROW_H;
+  const SUBTOTAL_H = 30;
+  const SUMMARY_H  = 130;
+  const FOOTER_H   = 30;
+  const TOTAL_H    = HEADER_H + PARTY_H + TABLE_HEADER_H + ITEMS_H + SUBTOTAL_H + SUMMARY_H + FOOTER_H;
 
-      <!-- Bill From/To -->
-      <div style="background:${GREEN_BG};padding:10px 20px;border-bottom:1px solid ${BORDER};">
-        <div style="color:${GREEN_DARK};font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${options.partyTitle}</div>
-        <div style="color:${DARK};font-size:15px;font-weight:700;margin-top:3px;">${options.partyName || "Walk-in Customer"}</div>
-        ${options.partyMobile ? `<div style="color:#475569;font-size:12px;margin-top:2px;">Mobile : ${options.partyMobile}</div>` : ""}
-        ${options.partyAddress ? `<div style="color:#475569;font-size:12px;margin-top:2px;">${options.partyAddress}</div>` : ""}
-      </div>
+  // ── Canvas setup ─────────────────────────────────────────────────────────
+  const canvas  = document.createElement("canvas");
+  canvas.width  = W * SCALE;
+  canvas.height = TOTAL_H * SCALE;
+  const ctx     = canvas.getContext("2d")!;
+  ctx.scale(SCALE, SCALE);
 
-      <!-- Items Table -->
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:${GREEN_BG};border-bottom:1.5px solid ${GREEN_DARK}33;">
-            <th style="padding:9px 10px;text-align:left;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">S.NO.</th>
-            <th style="padding:9px 10px;text-align:left;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">ITEMS</th>
-            <th style="padding:9px 10px;text-align:right;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">QTY.</th>
-            <th style="padding:9px 10px;text-align:right;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">RATE</th>
-            <th style="padding:9px 10px;text-align:right;color:${DARK};font-size:11px;font-weight:700;letter-spacing:0.5px;">AMOUNT</th>
-          </tr>
-        </thead>
-        <tbody>${itemRows}</tbody>
-        <!-- Subtotal Row -->
-        <tr style="background:${GREEN_BG};border-top:1.5px solid ${GREEN_DARK}33;">
-          <td colspan="2" style="padding:9px 10px;color:${DARK};font-size:13px;font-weight:700;">SUBTOTAL</td>
-          <td style="padding:9px 10px;color:${DARK};font-size:13px;font-weight:700;text-align:right;">${Number(totalQty).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
-          <td></td>
-          <td style="padding:9px 10px;color:${DARK};font-size:13px;font-weight:700;text-align:right;">₹ ${Number(totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</td>
-        </tr>
-      </table>
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const fill  = (color: string) => { ctx.fillStyle = color; };
+  const stroke = (color: string) => { ctx.strokeStyle = color; };
+  const rect  = (x: number, y: number, w: number, h: number) => ctx.fillRect(x, y, w, h);
+  const line  = (x1: number, y1: number, x2: number, y2: number) => {
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  };
+  const text  = (t: string, x: number, y: number, maxW?: number) => {
+    if (maxW) ctx.fillText(t, x, y, maxW); else ctx.fillText(t, x, y);
+  };
+  const rtext = (t: string, rightX: number, y: number) => {
+    const w = ctx.measureText(t).width;
+    ctx.fillText(t, rightX - w, y);
+  };
 
-      <!-- Summary Footer -->
-      <div style="display:flex;border-top:1.5px solid ${BORDER};">
-        <!-- Left: Payment -->
-        <div style="flex:1;padding:14px 16px;border-right:1px solid ${BORDER};">
-          <div style="color:#64748b;font-size:11px;font-weight:600;margin-bottom:4px;">PAYMENT MODE</div>
-          <div style="color:${DARK};font-size:13px;font-weight:700;">${(options.paymentMethod || "CASH").toUpperCase()}</div>
-          ${options.notes ? `<div style="color:#64748b;font-size:11px;margin-top:8px;font-style:italic;">Notes: ${options.notes}</div>` : ""}
-        </div>
-        <!-- Right: Amounts -->
-        <div style="flex:1;padding:14px 16px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
-            <span style="color:${DARK};font-size:12px;font-weight:600;">Total Amount</span>
-            <span style="color:${DARK};font-size:12px;font-weight:700;">₹ ${Number(totalAmount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
-            <span style="color:${DARK};font-size:12px;font-weight:600;">Paid Amount</span>
-            <span style="color:#16a34a;font-size:12px;font-weight:700;">₹ ${Number(paid).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-            <span style="color:${DARK};font-size:12px;font-weight:600;">Balance</span>
-            <span style="color:${balance > 0 ? "#dc2626" : DARK};font-size:12px;font-weight:700;">₹ ${Number(balance).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-          </div>
-          <div style="font-size:10px;color:#64748b;font-style:italic;">${amountWords}</div>
-        </div>
-      </div>
+  let y = 0;
 
-      <!-- Footer -->
-      <div style="background:#f8fafc;padding:8px 16px;text-align:center;border-top:1px solid ${BORDER};">
-        <div style="color:#94a3b8;font-size:10px;">Generated using The Scrap Co. ERP System</div>
-      </div>
-    </div>
-  `;
+  // ── 1. Header bar (green) ─────────────────────────────────────────────────
+  fill(GREEN_DARK); rect(0, y, W, HEADER_H);
 
-  // Create hidden off-screen container (must be in the document for html2canvas to render)
-  const container = document.createElement("div");
-  container.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:620px;overflow:visible;";
-  container.innerHTML = html;
-  document.body.appendChild(container);
+  // Logo placeholder circle
+  fill("rgba(255,255,255,0.18)"); ctx.beginPath(); ctx.arc(PAD + 24, y + 40, 22, 0, Math.PI * 2); ctx.fill();
+  fill(WHITE);
+  ctx.font = "bold 10px Arial";
+  const logoLines = ["THE", "SCRAP", "CO."];
+  logoLines.forEach((l, i) => { const lw = ctx.measureText(l).width; ctx.fillText(l, PAD + 24 - lw/2, y + 26 + i * 14); });
 
+  // Try to draw the actual logo image
   try {
-    const canvas = await windowObj.html2canvas(container.firstElementChild as HTMLElement, {
-      scale: 2,            // 2× for crisp retina-quality output
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      windowWidth: 640,
-    });
+    const logoImg = await loadImageBase64("/images/logo.jpg");
+    if (logoImg) {
+      const img = new Image();
+      img.src = logoImg;
+      await new Promise<void>((r) => { img.onload = () => r(); img.onerror = () => r(); });
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(PAD + 24, y + 40, 22, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, PAD + 2, y + 18, 44, 44);
+      ctx.restore();
+    }
+  } catch { /* skip logo on error */ }
 
-    // Convert to blob synchronously-ish then trigger download
-    // We must append the anchor to the DOM before clicking — required by Chrome/Firefox
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = `receipt-${options.docNumber}.jpg`;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    // Small delay before cleanup so the click registers
-    await new Promise<void>((r) => setTimeout(r, 200));
-    document.body.removeChild(a);
-  } finally {
-    document.body.removeChild(container);
+  fill(WHITE);
+  ctx.font = "bold 18px Arial"; text("The Scrap Co.", PAD + 52, y + 30);
+  ctx.font = "11px Arial"; fill("rgba(255,255,255,0.82)");
+  text("Mobile : 7292016625", PAD + 52, y + 48);
+  text("bookings.scrapco@gmail.com", PAD + 52, y + 63);
+
+  // Header right — doc info
+  fill("rgba(255,255,255,0.72)"); ctx.font = "11px Arial";
+  rtext(options.docType, W - PAD, y + 22);
+  text(`${docLabel}:`, W - 160, y + 40);
+  fill(WHITE); ctx.font = "bold 11px Arial"; rtext(options.docNumber, W - PAD, y + 40);
+  fill("rgba(255,255,255,0.72)"); ctx.font = "11px Arial";
+  text(`${dateLabel}:`, W - 160, y + 56);
+  fill(WHITE); ctx.font = "bold 11px Arial"; rtext(formattedDate, W - PAD, y + 56);
+
+  y += HEADER_H;
+
+  // ── 2. Party bar ──────────────────────────────────────────────────────────
+  fill(GREEN_BG); rect(0, y, W, PARTY_H);
+  stroke(BORDER); ctx.lineWidth = 0.5; line(0, y + PARTY_H, W, y + PARTY_H);
+
+  fill(GREEN_DARK); ctx.font = "bold 10px Arial";
+  text(options.partyTitle.toUpperCase(), PAD, y + 18);
+
+  fill(DARK); ctx.font = "bold 15px Arial";
+  text(options.partyName || "Walk-in Customer", PAD, y + 36);
+
+  ctx.font = "12px Arial"; fill(MID);
+  let partyY = y + 52;
+  if (options.partyMobile) { text(`Mobile : ${options.partyMobile}`, PAD, partyY); partyY += 16; }
+  if (options.partyAddress) { text(options.partyAddress, PAD, partyY, W - PAD * 2); }
+
+  y += PARTY_H;
+
+  // ── 3. Table header ───────────────────────────────────────────────────────
+  fill(GREEN_BG); rect(0, y, W, TABLE_HEADER_H);
+  stroke(BORDER); ctx.lineWidth = 0.5;
+  line(0, y, W, y); line(0, y + TABLE_HEADER_H, W, y + TABLE_HEADER_H);
+
+  fill(DARK); ctx.font = "bold 11px Arial";
+  const COL_ITEM   = PAD + 30;
+  const COL_QTY    = W - 200;
+  const COL_RATE   = W - 110;
+  const COL_AMOUNT = W - PAD;
+
+  text("S.NO.", PAD, y + 19);
+  text("ITEMS", COL_ITEM, y + 19);
+  rtext("QTY.", COL_QTY, y + 19);
+  rtext("RATE", COL_RATE, y + 19);
+  rtext("AMOUNT", COL_AMOUNT, y + 19);
+
+  y += TABLE_HEADER_H;
+
+  // ── 4. Item rows ──────────────────────────────────────────────────────────
+  options.items.forEach((item, idx) => {
+    const rowBg = idx % 2 === 0 ? WHITE : "#f8faf5";
+    fill(rowBg); rect(0, y, W, ROW_H);
+    stroke(BORDER); ctx.lineWidth = 0.3; line(0, y + ROW_H, W, y + ROW_H);
+
+    fill(DARK); ctx.font = "12px Arial";
+    text(String(idx + 1), PAD, y + 18);
+    ctx.font = "bold 12px Arial";
+    text(item.name.toUpperCase(), COL_ITEM, y + 18, COL_QTY - COL_ITEM - 10);
+    ctx.font = "12px Arial";
+    rtext(`${fmt(item.qty)} ${item.unit.toUpperCase()}`, COL_QTY, y + 18);
+    rtext(fmt(item.rate), COL_RATE, y + 18);
+    ctx.font = "bold 12px Arial";
+    rtext(fmt(item.amount), COL_AMOUNT, y + 18);
+
+    y += ROW_H;
+  });
+
+  // ── 5. Subtotal row ───────────────────────────────────────────────────────
+  fill(GREEN_BG); rect(0, y, W, SUBTOTAL_H);
+  stroke(BORDER); ctx.lineWidth = 0.5; line(0, y, W, y); line(0, y + SUBTOTAL_H, W, y + SUBTOTAL_H);
+
+  fill(DARK); ctx.font = "bold 13px Arial";
+  text("SUBTOTAL", COL_ITEM, y + 19);
+  rtext(`${fmt(totalQty)} KGS`, COL_QTY, y + 19);
+  rtext(`₹ ${fmt(totalAmount)}`, COL_AMOUNT, y + 19);
+
+  y += SUBTOTAL_H;
+
+  // ── 6. Summary section ────────────────────────────────────────────────────
+  const midX = W / 2;
+  fill(WHITE); rect(0, y, W, SUMMARY_H);
+  stroke(BORDER); ctx.lineWidth = 0.5;
+  line(midX, y, midX, y + SUMMARY_H);
+  line(0, y + SUMMARY_H, W, y + SUMMARY_H);
+
+  // Left — payment
+  fill(MID); ctx.font = "bold 10px Arial"; text("PAYMENT MODE", PAD, y + 20);
+  fill(DARK); ctx.font = "bold 13px Arial"; text((options.paymentMethod || "CASH").toUpperCase(), PAD, y + 38);
+  if (options.notes) {
+    fill(MID); ctx.font = "italic 10px Arial";
+    text(`Notes: ${options.notes}`, PAD, y + 56, midX - PAD * 2);
   }
+
+  // Right — amounts
+  const rPAD = midX + 16;
+  const rRight = W - PAD;
+
+  const amountRow = (label: string, value: string, vy: number, color = DARK) => {
+    fill(DARK); ctx.font = "bold 12px Arial"; text(label, rPAD, vy);
+    fill(color); ctx.font = "bold 12px Arial"; rtext(value, rRight, vy);
+  };
+
+  amountRow("Total Amount", `₹ ${fmt(totalAmount)}`, y + 22);
+  amountRow("Paid Amount",  `₹ ${fmt(paid)}`, y + 42, "#16a34a");
+  amountRow("Balance",      `₹ ${fmt(balance)}`, y + 62, balance > 0 ? "#dc2626" : DARK);
+
+  stroke(BORDER); ctx.lineWidth = 0.3; line(rPAD, y + 70, rRight, y + 70);
+  fill(MID); ctx.font = "italic 10px Arial";
+  text(amountWords, rPAD, y + 84, rRight - rPAD);
+
+  y += SUMMARY_H;
+
+  // ── 7. Footer ─────────────────────────────────────────────────────────────
+  fill(LIGHT_BG); rect(0, y, W, FOOTER_H);
+  stroke(BORDER); ctx.lineWidth = 0.5; line(0, y, W, y);
+  fill(MID); ctx.font = "10px Arial";
+  const footerTxt = "Generated using The Scrap Co. ERP System";
+  const ftw = ctx.measureText(footerTxt).width;
+  ctx.fillText(footerTxt, W / 2 - ftw / 2, y + 19);
+
+  // ── Download ──────────────────────────────────────────────────────────────
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = `receipt-${options.docNumber}.jpg`;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
+
