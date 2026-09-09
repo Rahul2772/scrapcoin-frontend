@@ -14,11 +14,20 @@ import {
   Info,
   Calendar,
   User,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import type { TelegramReceipt } from "@/lib/api";
+import {
+  exportStandingStockToExcel,
+  exportStandingStockToPDF,
+  type AggregatedMaterialStock,
+} from "@/lib/standingStockExport";
 
 interface ContributingReceipt {
   receiptId: string;
@@ -30,16 +39,6 @@ interface ContributingReceipt {
   amount: number;
 }
 
-interface AggregatedMaterialStock {
-  id: string;
-  name: string;
-  unit: string;
-  totalQty: number;
-  totalAmount: number;
-  avgRate: number;
-  receiptCount: number;
-  receipts: ContributingReceipt[];
-}
 
 interface Props {
   receipts: TelegramReceipt[];
@@ -168,73 +167,53 @@ export function TelegramStandingMaterialStockBanner({
     return list;
   }, [items, search, sortBy]);
 
-  // CSV export handler
-  const handleExportCsv = () => {
-    if (items.length === 0) return;
+  const [pdfExporting, setPdfExporting] = useState(false);
 
-    const headers = [
-      "Material Name",
-      "Standing Quantity",
-      "Unit",
-      "Weighted Avg Rate (Rs.)",
-      "Total Estimated Value (Rs.)",
-      "% Share of Total Value",
-      "Pending Receipt Count",
-      "Contributing Receipts",
-    ];
+  // Excel (.csv UTF-8 BOM) export handler
+  const handleExportExcel = () => {
+    if (items.length === 0 && totalPendingReceipts === 0) {
+      toast.info("No pending receipt data to export");
+      return;
+    }
+    try {
+      exportStandingStockToExcel({
+        items: processedItems,
+        receipts,
+        grandTotalWeightKg,
+        grandTotalValue,
+        totalPendingReceipts,
+        hasOtherUnits,
+      });
+      toast.success("Excel report downloaded successfully!");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to export Excel report");
+    }
+  };
 
-    const rows = processedItems.map((it) => {
-      const share =
-        grandTotalValue > 0
-          ? ((it.totalAmount / grandTotalValue) * 100).toFixed(1)
-          : "0";
-      const receiptsSummary = it.receipts
-        .map(
-          (r) =>
-            `${r.purchaseNo} (${r.customerName}: ${r.qty} ${it.unit} @ Rs.${r.rate})`
-        )
-        .join("; ");
-
-      return [
-        `"${it.name.replace(/"/g, '""')}"`,
-        it.totalQty.toFixed(2),
-        `"${it.unit}"`,
-        it.avgRate.toFixed(2),
-        it.totalAmount.toFixed(2),
-        `"${share}%"`,
-        it.receiptCount,
-        `"${receiptsSummary.replace(/"/g, '""')}"`,
-      ].join(",");
-    });
-
-    // Grand total row
-    const totalRow = [
-      `"GRAND TOTAL"`,
-      grandTotalWeightKg.toFixed(2),
-      `"${hasOtherUnits ? "mixed" : "kg"}"`,
-      `"-"`,
-      grandTotalValue.toFixed(2),
-      `"100%"`,
-      totalPendingReceipts,
-      `"-"`,
-    ].join(",");
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows, totalRow].join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `scrapco_standing_inventory_pending_${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // PDF report export handler
+  const handleExportPdf = async () => {
+    if (items.length === 0 && totalPendingReceipts === 0) {
+      toast.info("No pending receipt data to export");
+      return;
+    }
+    setPdfExporting(true);
+    try {
+      await exportStandingStockToPDF({
+        items: processedItems,
+        receipts,
+        grandTotalWeightKg,
+        grandTotalValue,
+        totalPendingReceipts,
+        hasOtherUnits,
+      });
+      toast.success("PDF report generated and downloaded!");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to generate PDF report");
+    } finally {
+      setPdfExporting(false);
+    }
   };
 
   return (
@@ -269,19 +248,34 @@ export function TelegramStandingMaterialStockBanner({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-          {items.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportCsv}
-              className="h-8 rounded-xl text-xs gap-1.5 cursor-pointer hover:bg-muted"
-              title="Download Standing Stock as CSV"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Export Stock</span> CSV
-            </Button>
-          )}
+        <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={items.length === 0 && totalPendingReceipts === 0}
+            className="h-8 rounded-xl text-xs gap-1.5 cursor-pointer hover:bg-muted font-medium"
+            title="Export Standing Stock and Telegram Receipts to Excel (.csv)"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">Export</span> Excel
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportPdf}
+            disabled={pdfExporting || (items.length === 0 && totalPendingReceipts === 0)}
+            className="h-8 rounded-xl text-xs gap-1.5 cursor-pointer hover:bg-muted font-medium"
+            title="Export Standing Stock and Telegram Receipts to PDF"
+          >
+            {pdfExporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
+            ) : (
+              <FileText className="h-3.5 w-3.5 text-red-600" />
+            )}
+            <span className="hidden sm:inline">Export</span> PDF
+          </Button>
 
           {onRefresh && (
             <Button
