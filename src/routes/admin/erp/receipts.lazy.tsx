@@ -62,6 +62,7 @@ export const Route = createLazyFileRoute("/admin/erp/receipts")({
 });
 
 import { generateStandardPDF, generateStandardPDFBlobUrl, generateReceiptImage } from "@/lib/pdfGenerator";
+import { TelegramStandingMaterialStockBanner } from "@/components/admin/TelegramStandingMaterialStockBanner";
 
 // PDF Generator for B2C Receipts using standard format
 async function generateReceiptPDF(r: GroupedERPPurchaseReceipt) {
@@ -147,6 +148,7 @@ function ERPReceiptsPage() {
 
   // ── Telegram state ────────────────────────────────────────────────────────
   const [tgReceipts, setTgReceipts] = useState<TelegramReceipt[]>([]);
+  const [allPendingTgReceipts, setAllPendingTgReceipts] = useState<TelegramReceipt[]>([]);
   const [tgLoading, setTgLoading] = useState(false);
   const [tgStatusFilter, setTgStatusFilter] = useState<"all" | "pending_review" | "verified" | "rejected">("pending_review");
   const [tgActioning, setTgActioning] = useState<string | null>(null);
@@ -306,7 +308,22 @@ function ERPReceiptsPage() {
     try {
       const statusArg = tgStatusFilter === "all" ? undefined : tgStatusFilter;
       const res = await fetchTelegramReceipts(session.access_token, statusArg);
-      if (res.success) setTgReceipts(res.receipts);
+      if (res.success) {
+        setTgReceipts(res.receipts);
+        if (tgStatusFilter === "pending_review") {
+          setAllPendingTgReceipts(res.receipts);
+        } else if (tgStatusFilter === "all") {
+          setAllPendingTgReceipts(res.receipts.filter((r) => r.status === "pending_review"));
+        }
+      }
+      // If filtering for verified/rejected, keep pending receipts synced for the inventory banner
+      if (tgStatusFilter !== "pending_review" && tgStatusFilter !== "all") {
+        fetchTelegramReceipts(session.access_token, "pending_review")
+          .then((pRes) => {
+            if (pRes.success) setAllPendingTgReceipts(pRes.receipts);
+          })
+          .catch(() => {});
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to load Telegram receipts");
     } finally {
@@ -783,8 +800,8 @@ function ERPReceiptsPage() {
         >
           <Send className="h-3.5 w-3.5" />
           Telegram Receipts
-          {/* Pending badge — load count on mount */}
-          <TelegramPendingBadge token={session?.access_token} />
+          {/* Pending badge */}
+          <TelegramPendingBadge token={session?.access_token} count={allPendingTgReceipts.length} />
         </button>
       </div>
 
@@ -974,6 +991,15 @@ function ERPReceiptsPage() {
               <RotateCw className={`h-3.5 w-3.5 ${tgLoading ? "animate-spin" : ""}`} />
             </Button>
           </div>
+
+          {/* Standing Material Stock Banner (on top of pending list) */}
+          {(tgStatusFilter === "pending_review" || tgStatusFilter === "all") && (
+            <TelegramStandingMaterialStockBanner
+              receipts={allPendingTgReceipts.length > 0 ? allPendingTgReceipts : (tgStatusFilter === "pending_review" ? tgReceipts : allPendingTgReceipts)}
+              loading={tgLoading}
+              onRefresh={loadTelegramReceipts}
+            />
+          )}
 
           {/* Telegram receipts table */}
           {tgLoading ? (
@@ -1713,16 +1739,28 @@ function ERPReceiptsPage() {
   );
 }
 
-/** Small badge showing pending Telegram receipt count — fetches independently */
-function TelegramPendingBadge({ token }: { token?: string }) {
-  const [count, setCount] = useState(0);
+/** Small badge showing pending Telegram receipt count */
+function TelegramPendingBadge({
+  token,
+  count: propCount,
+}: {
+  token?: string;
+  count?: number;
+}) {
+  const [count, setCount] = useState(propCount ?? 0);
 
   useEffect(() => {
+    if (propCount !== undefined && propCount > 0) {
+      setCount(propCount);
+      return;
+    }
     if (!token) return;
     fetchTelegramReceipts(token, "pending_review")
-      .then((res) => { if (res.success) setCount(res.receipts.length); })
+      .then((res) => {
+        if (res.success) setCount(res.receipts.length);
+      })
       .catch(() => {});
-  }, [token]);
+  }, [token, propCount]);
 
   if (count === 0) return null;
   return (
