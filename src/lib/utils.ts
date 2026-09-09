@@ -12,6 +12,7 @@ export interface GroupedERPPurchaseReceipt {
   customer_id?: string | null;
   customer_name: string;
   customer_phone?: string;
+  customer_address?: string;
   payment_method: string;
   notes?: string | null;
   created_at: string;
@@ -58,6 +59,7 @@ export function groupReceipts(rawReceipts: ERPPurchaseReceipt[]): GroupedERPPurc
       customer_id: baseItem.customer_id,
       customer_name: baseItem.customer_name,
       customer_phone: baseItem.customer_phone,
+      customer_address: baseItem.customer_address,
       payment_method: baseItem.payment_method,
       notes: baseItem.notes,
       created_at: baseItem.created_at,

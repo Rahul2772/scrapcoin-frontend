@@ -83,6 +83,7 @@ async function generateReceiptPDF(r: GroupedERPPurchaseReceipt) {
     partyTitle: "BILL FROM",
     partyName: r.customer_name || "Walk-in Customer",
     partyMobile: r.customer_phone || "",
+    partyAddress: r.customer_address || "",
     paymentMethod: r.payment_method || "CASH",
     paidAmount: r.total_amount,
     balanceAmount: 0,
@@ -117,6 +118,7 @@ async function generateReceiptImageFile(r: GroupedERPPurchaseReceipt) {
     partyTitle: "BILL FROM",
     partyName: r.customer_name || "Walk-in Customer",
     partyMobile: r.customer_phone || "",
+    partyAddress: r.customer_address || "",
     paymentMethod: r.payment_method || "CASH",
     paidAmount: r.total_amount,
     balanceAmount: 0,
@@ -332,6 +334,7 @@ function ERPReceiptsPage() {
         partyTitle: "BILL FROM",
         partyName: r.customer_name || "Walk-in Customer",
         partyMobile: r.customer_phone || "",
+        partyAddress: r.customer_address || "",
         paymentMethod: r.payment_method || "CASH",
         paidAmount: r.total_amount,
         balanceAmount: 0,
@@ -941,8 +944,16 @@ function ERPReceiptsPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-medium text-foreground truncate max-w-[140px]">
-                      {r.customer_name}
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-foreground truncate max-w-[150px]">{r.customer_name}</div>
+                      {r.customer_phone && (
+                        <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>
+                      )}
+                      {r.customer_address && (
+                        <div className="text-[10px] text-muted-foreground/80 truncate max-w-[150px]" title={r.customer_address}>
+                          {r.customer_address}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
                       {r.material_name}
@@ -1825,6 +1836,7 @@ function ERPReceiptsPage() {
                 </DialogTitle>
                 <div className="text-[11px] text-muted-foreground">
                   {viewReceipt?.created_at && new Date(viewReceipt.created_at).toLocaleString("en-IN")} • Amount: ₹{viewReceipt?.total_amount.toLocaleString("en-IN")}
+                  {viewReceipt?.customer_address ? ` • ${viewReceipt.customer_address}` : ""}
                 </div>
               </div>
             </div>

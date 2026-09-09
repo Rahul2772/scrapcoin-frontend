@@ -194,6 +194,7 @@ export type ERPPurchaseReceipt = {
   created_at: string;
   customer_name: string;
   customer_phone?: string;
+  customer_address?: string;
   material_name: string;
   material_unit: string;
 };
@@ -557,7 +558,7 @@ export type TelegramReceipt = {
   purchase_receipt_id: string | null;
   created_at: string;
   // joined from erp_customers
-  erp_customers?: { name: string; phone: string } | null;
+  erp_customers?: { name: string; phone: string; address?: string | null } | null;
 };
 
 export async function fetchTelegramReceipts(
