@@ -554,6 +554,7 @@ export type TelegramReceipt = {
   verified_by: string | null;
   verified_at: string | null;
   reject_reason: string | null;
+  purchase_receipt_id: string | null;
   created_at: string;
   // joined from erp_customers
   erp_customers?: { name: string; phone: string } | null;
@@ -567,10 +568,29 @@ export async function fetchTelegramReceipts(
   return authFetch(`${API_BASE}/api/telegram/receipts${qs}`, token);
 }
 
+export async function updateTelegramReceipt(
+  id: string,
+  data: {
+    customer_name?: string;
+    customer_mobile?: string;
+    customer_address?: string | null;
+    purchase_date?: string | null;
+    payment_mode?: string | null;
+    notes?: string | null;
+    line_items?: TelegramReceiptLineItem[];
+  },
+  token?: string
+): Promise<{ success: boolean; message: string }> {
+  return authFetch(`${API_BASE}/api/telegram/receipts/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function verifyTelegramReceipt(
   id: string,
   token?: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; receipt_number?: string }> {
   return authFetch(`${API_BASE}/api/telegram/receipts/${id}/verify`, token, { method: "PATCH" });
 }
 

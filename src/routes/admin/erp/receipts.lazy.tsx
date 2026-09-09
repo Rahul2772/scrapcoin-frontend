@@ -10,6 +10,7 @@ import {
   updateERPPurchaseReceipt,
   deleteERPPurchaseReceipt,
   fetchTelegramReceipts,
+  updateTelegramReceipt,
   verifyTelegramReceipt,
   rejectTelegramReceipt,
   fetchTelegramReceiptPdfUrl,
@@ -17,6 +18,7 @@ import {
   type ERPMaterial,
   type ERPCustomer,
   type TelegramReceipt,
+  type TelegramReceiptLineItem,
 } from "@/lib/api";
 import { groupReceipts, type GroupedERPPurchaseReceipt } from "@/lib/utils";
 import { exportReceiptsCsv } from "@/lib/exportCsv";
@@ -42,6 +44,10 @@ import {
   CheckCircle,
   XCircle,
   ImageDown,
+  Eye,
+  Save,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -146,6 +152,31 @@ function ERPReceiptsPage() {
   const [tgActioning, setTgActioning] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+
+  // Telegram Review Dialog states
+  const [tgReviewOpen, setTgReviewOpen] = useState(false);
+  const [tgReviewReceipt, setTgReviewReceipt] = useState<TelegramReceipt | null>(null);
+  const [tgReviewPdfUrl, setTgReviewPdfUrl] = useState<string | null>(null);
+  const [tgReviewPdfLoading, setTgReviewPdfLoading] = useState(false);
+  const [tgSaving, setTgSaving] = useState(false);
+  const [tgApproving, setTgApproving] = useState(false);
+
+  // Review Form editable fields
+  const [tgCustName, setTgCustName] = useState("");
+  const [tgCustMobile, setTgCustMobile] = useState("");
+  const [tgCustAddress, setTgCustAddress] = useState("");
+  const [tgPurchaseDate, setTgPurchaseDate] = useState("");
+  const [tgPaymentMode, setTgPaymentMode] = useState("cash");
+  const [tgNotes, setTgNotes] = useState("");
+  const [tgLineItems, setTgLineItems] = useState<
+    Array<{
+      item_name: string;
+      qty: number | "";
+      unit: string;
+      rate: number | "";
+      amount: number;
+    }>
+  >([]);
 
   // Modals
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -282,19 +313,243 @@ function ERPReceiptsPage() {
     }
   }
 
+  const tgComputedSubtotal = tgLineItems.reduce(
+    (acc, it) => acc + Number((Number(it.qty || 0) * Number(it.rate || 0)).toFixed(2)),
+    0
+  );
+
+  function handleTgItemChange(
+    index: number,
+    field: "item_name" | "qty" | "rate" | "unit",
+    value: any
+  ) {
+    setTgLineItems((prev) => {
+      const copy = [...prev];
+      const target = { ...copy[index], [field]: value };
+      const q = field === "qty" ? (value !== "" ? Number(value) : "") : target.qty;
+      const r = field === "rate" ? (value !== "" ? Number(value) : "") : target.rate;
+      target.amount = Number((Number(q || 0) * Number(r || 0)).toFixed(2));
+      copy[index] = target;
+      return copy;
+    });
+  }
+
+  function addTgItemRow() {
+    setTgLineItems((prev) => [
+      ...prev,
+      { item_name: "", qty: "", unit: "kg", rate: "", amount: 0 },
+    ]);
+  }
+
+  function removeTgItemRow(index: number) {
+    setTgLineItems((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
+  async function openTgReview(r: TelegramReceipt) {
+    setTgReviewReceipt(r);
+    setTgCustName(r.customer_name || "");
+    setTgCustMobile(r.customer_mobile || "");
+    setTgCustAddress(r.customer_address || "");
+    setTgPurchaseDate(
+      r.purchase_date
+        ? new Date(r.purchase_date).toISOString().split("T")[0]
+        : new Date(r.created_at).toISOString().split("T")[0]
+    );
+    setTgPaymentMode(r.payment_mode || "cash");
+    setTgNotes(r.notes || "");
+
+    const items =
+      r.line_items && r.line_items.length > 0
+        ? r.line_items.map((li) => ({
+            item_name: li.item_name || "",
+            qty: (li.qty !== undefined && li.qty !== null) ? li.qty : ("" as const),
+            unit: li.unit || "kg",
+            rate: (li.rate !== undefined && li.rate !== null) ? li.rate : ("" as const),
+            amount: li.amount ?? Number((Number(li.qty || 0) * Number(li.rate || 0)).toFixed(2)),
+          }))
+        : [{ item_name: "", qty: "" as const, unit: "kg", rate: "" as const, amount: 0 }];
+
+    setTgLineItems(items);
+    setTgReviewOpen(true);
+
+    // Fetch signed PDF URL
+    setTgReviewPdfLoading(true);
+    setTgReviewPdfUrl(null);
+    try {
+      const res = await fetchTelegramReceiptPdfUrl(r.id, session?.access_token);
+      if (res.success && res.url) {
+        setTgReviewPdfUrl(res.url);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setTgReviewPdfLoading(false);
+    }
+  }
+
+  async function handleSaveTgReview() {
+    if (!tgReviewReceipt || !session?.access_token) return;
+    if (tgLineItems.length === 0) {
+      toast.error("At least one line item is required");
+      return;
+    }
+    for (let i = 0; i < tgLineItems.length; i++) {
+      const it = tgLineItems[i];
+      if (!it.item_name.trim()) {
+        toast.error(`Item #${i + 1} name cannot be empty`);
+        return;
+      }
+      if (it.qty === "" || Number(it.qty) <= 0) {
+        toast.error(`Item #${i + 1} weight/qty must be greater than 0`);
+        return;
+      }
+      if (it.rate === "" || Number(it.rate) < 0) {
+        toast.error(`Item #${i + 1} rate must be non-negative`);
+        return;
+      }
+    }
+
+    setTgSaving(true);
+    try {
+      const payload = {
+        customer_name: tgCustName.trim() || undefined,
+        customer_mobile: tgCustMobile.trim() || undefined,
+        customer_address: tgCustAddress.trim() || null,
+        purchase_date: tgPurchaseDate ? new Date(tgPurchaseDate).toISOString() : null,
+        payment_mode: tgPaymentMode,
+        notes: tgNotes.trim() || null,
+        line_items: tgLineItems.map((it, idx) => ({
+          sno: idx + 1,
+          item_name: it.item_name.trim(),
+          qty: Number(it.qty),
+          unit: it.unit || "KG",
+          rate: Number(it.rate),
+          amount: Number((Number(it.qty) * Number(it.rate)).toFixed(2)),
+        })),
+      };
+
+      const res = await updateTelegramReceipt(tgReviewReceipt.id, payload, session.access_token);
+      if (res.success) {
+        toast.success("Receipt edits saved successfully!");
+        setTgReviewReceipt((prev) => (prev ? { ...prev, ...payload } : null));
+        await loadTelegramReceipts();
+      } else {
+        toast.error(res.message || "Failed to save edits");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save edits");
+    } finally {
+      setTgSaving(false);
+    }
+  }
+
+  async function handleApproveFromReview() {
+    if (!tgReviewReceipt || !session?.access_token) return;
+    if (tgLineItems.length === 0) {
+      toast.error("At least one line item is required");
+      return;
+    }
+    for (let i = 0; i < tgLineItems.length; i++) {
+      const it = tgLineItems[i];
+      if (!it.item_name.trim()) {
+        toast.error(`Item #${i + 1} name cannot be empty`);
+        return;
+      }
+      if (it.qty === "" || Number(it.qty) <= 0) {
+        toast.error(`Item #${i + 1} weight/qty must be greater than 0`);
+        return;
+      }
+      if (it.rate === "" || Number(it.rate) < 0) {
+        toast.error(`Item #${i + 1} rate must be non-negative`);
+        return;
+      }
+    }
+
+    setTgApproving(true);
+    try {
+      // 1. Save edits first so verify creates the exact receipt with user corrections
+      const payload = {
+        customer_name: tgCustName.trim() || undefined,
+        customer_mobile: tgCustMobile.trim() || undefined,
+        customer_address: tgCustAddress.trim() || null,
+        purchase_date: tgPurchaseDate ? new Date(tgPurchaseDate).toISOString() : null,
+        payment_mode: tgPaymentMode,
+        notes: tgNotes.trim() || null,
+        line_items: tgLineItems.map((it, idx) => ({
+          sno: idx + 1,
+          item_name: it.item_name.trim(),
+          qty: Number(it.qty),
+          unit: it.unit || "KG",
+          rate: Number(it.rate),
+          amount: Number((Number(it.qty) * Number(it.rate)).toFixed(2)),
+        })),
+      };
+
+      await updateTelegramReceipt(tgReviewReceipt.id, payload, session.access_token);
+
+      // 2. Call verify
+      const res = await verifyTelegramReceipt(tgReviewReceipt.id, session.access_token);
+      if (res.success) {
+        toast.success(
+          res.receipt_number
+            ? `Approved — created receipt ${res.receipt_number}`
+            : "Receipt verified & created ✅"
+        );
+        setTgReviewOpen(false);
+        setTgReviewReceipt(null);
+        await Promise.all([loadTelegramReceipts(), loadReceipts()]);
+      } else {
+        toast.error(res.message || "Approval failed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Verification failed");
+    } finally {
+      setTgApproving(false);
+    }
+  }
+
+  async function handleRejectFromReview() {
+    if (!tgReviewReceipt || !session?.access_token) return;
+    const reason = window.prompt("Reason for rejection (optional):");
+    if (reason === null) return; // user clicked Cancel
+    setTgActioning(tgReviewReceipt.id);
+    try {
+      const res = await rejectTelegramReceipt(tgReviewReceipt.id, reason, session.access_token);
+      if (res.success) {
+        toast.success("Receipt rejected");
+        setTgReviewOpen(false);
+        setTgReviewReceipt(null);
+        loadTelegramReceipts();
+      } else {
+        toast.error(res.message || "Rejection failed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Rejection failed");
+    } finally {
+      setTgActioning(null);
+    }
+  }
+
   async function handleTgVerify(id: string) {
     if (!session?.access_token) return;
     setTgActioning(id);
+    setTgApproving(true);
     try {
       const res = await verifyTelegramReceipt(id, session.access_token);
       if (res.success) {
-        toast.success("Receipt verified ✅");
-        loadTelegramReceipts();
+        toast.success(res.receipt_number
+          ? `Approved — created receipt ${res.receipt_number}`
+          : "Receipt verified ✅"
+        );
+        setTgReviewOpen(false);
+        setTgReviewReceipt(null);
+        await Promise.all([loadTelegramReceipts(), loadReceipts()]);
       }
     } catch (err: any) {
       toast.error(err.message || "Verification failed");
     } finally {
       setTgActioning(null);
+      setTgApproving(false);
     }
   }
 
@@ -703,9 +958,15 @@ function ERPReceiptsPage() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {tgReceipts.map((r) => (
-                      <tr key={r.id} className={`transition-colors ${
-                        r.status === "pending_review" ? "bg-amber-500/5 hover:bg-amber-500/10" : "hover:bg-muted/10"
-                      }`}>
+                      <tr
+                        key={r.id}
+                        onClick={() => openTgReview(r)}
+                        className={`transition-colors cursor-pointer ${
+                          r.status === "pending_review"
+                            ? "bg-amber-500/5 hover:bg-amber-500/15"
+                            : "hover:bg-muted/20"
+                        }`}
+                      >
                         <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
                           {new Date(r.created_at).toLocaleDateString("en-IN")}
                         </td>
@@ -732,71 +993,49 @@ function ERPReceiptsPage() {
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
                             r.status === "pending_review"
-                              ? "bg-amber-100 text-amber-700 border-amber-200"
+                              ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
                               : r.status === "verified"
-                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                              : "bg-gray-100 text-gray-500 border-gray-200"
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                              : "bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
                           }`}>
                             {r.status === "pending_review" ? "⏳ Pending" : r.status === "verified" ? "✅ Verified" : "⛔ Rejected"}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* PDF preview */}
+                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {r.status === "pending_review" ? (
+                              <Button
+                                size="sm"
+                                onClick={() => openTgReview(r)}
+                                className="h-7 px-3 text-[11px] font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white gap-1 cursor-pointer shadow-xs"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                                Review
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openTgReview(r)}
+                                className="h-7 px-2.5 text-[11px] font-medium rounded-lg text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </Button>
+                            )}
+
                             {r.pdf_storage_path && (
                               <Button
-                                variant="ghost" size="icon"
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => openPdf(r.id)}
                                 className="h-7 w-7 rounded-lg text-muted-foreground hover:text-blue-600 cursor-pointer"
-                                title="View original PDF"
+                                title="Open PDF in new tab"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            {/* Verify / Reject — only for pending, only admin */}
-                            {r.status === "pending_review" && isAdmin && (
-                              <>
-                                <Button
-                                  variant="ghost" size="icon"
-                                  onClick={() => handleTgVerify(r.id)}
-                                  disabled={tgActioning === r.id}
-                                  className="h-7 w-7 rounded-lg text-emerald-600 hover:bg-emerald-50 cursor-pointer"
-                                  title="Approve"
-                                >
-                                  <CheckCircle className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost" size="icon"
-                                  onClick={() => { setRejectingId(r.id); setRejectReason(""); }}
-                                  disabled={tgActioning === r.id}
-                                  className="h-7 w-7 rounded-lg text-red-500 hover:bg-red-50 cursor-pointer"
-                                  title="Reject"
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
                           </div>
-                          {/* Inline reject reason input */}
-                          {rejectingId === r.id && (
-                            <div className="mt-2 flex flex-col gap-1.5 min-w-[200px]">
-                              <Input
-                                placeholder="Reason (optional)"
-                                value={rejectReason}
-                                onChange={(e) => setRejectReason(e.target.value)}
-                                className="h-7 text-[11px] rounded-lg"
-                                autoFocus
-                              />
-                              <div className="flex gap-1">
-                                <Button size="sm" className="h-6 text-[10px] rounded-lg flex-1 cursor-pointer" onClick={() => handleTgReject(r.id)} disabled={tgActioning === r.id}>
-                                  Confirm Reject
-                                </Button>
-                                <Button variant="ghost" size="sm" className="h-6 text-[10px] rounded-lg cursor-pointer" onClick={() => setRejectingId(null)}>
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          )}
                         </td>
                       </tr>
                     ))}
@@ -1055,6 +1294,361 @@ function ERPReceiptsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Telegram Review & Edit Dialog ───────────────────────────────── */}
+      <Dialog open={tgReviewOpen} onOpenChange={setTgReviewOpen}>
+        <DialogContent className="max-w-6xl w-[96vw] h-[92vh] max-h-[92vh] p-0 flex flex-col bg-card rounded-2xl overflow-hidden border border-border shadow-2xl">
+          {/* Dialog Header */}
+          <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                  <span>Review Telegram Receipt</span>
+                  {tgReviewReceipt?.purchase_no && (
+                    <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-mono">
+                      #{tgReviewReceipt.purchase_no}
+                    </span>
+                  )}
+                </DialogTitle>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border ${
+                    tgReviewReceipt?.status === "pending_review"
+                      ? "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                      : tgReviewReceipt?.status === "verified"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                      : "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+                  }`}>
+                    {tgReviewReceipt?.status === "pending_review"
+                      ? "⏳ Pending Review"
+                      : tgReviewReceipt?.status === "verified"
+                      ? "✅ Verified & Created"
+                      : "⛔ Rejected"}
+                  </span>
+                  {tgReviewReceipt?.created_at && (
+                    <span className="text-[11px] text-muted-foreground">
+                      Received: {new Date(tgReviewReceipt.created_at).toLocaleString("en-IN")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {tgReviewPdfUrl && (
+              <a
+                href={tgReviewPdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1 font-medium mr-8"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Open PDF in new tab
+              </a>
+            )}
+          </DialogHeader>
+
+          {/* Side-by-side Body */}
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-border">
+            {/* LEFT: PDF Preview */}
+            <div className="lg:col-span-6 flex flex-col h-full bg-muted/20 min-h-0">
+              <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                <span>Original Ingested PDF</span>
+                {tgReviewReceipt?.pdf_storage_path && (
+                  <span className="text-[10px] font-mono opacity-70 truncate max-w-[220px]">
+                    {tgReviewReceipt.pdf_storage_path.split("/").pop()}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-h-0 relative">
+                {tgReviewPdfLoading ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="text-xs">Loading PDF document…</span>
+                  </div>
+                ) : tgReviewPdfUrl ? (
+                  <iframe
+                    src={tgReviewPdfUrl}
+                    className="w-full h-full border-0 bg-white"
+                    title="Telegram Receipt PDF Preview"
+                  />
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-6 text-center text-muted-foreground">
+                    <FileText className="h-10 w-10 mb-2 opacity-30" />
+                    <p className="text-xs">No PDF available for this receipt.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT: Editable Form */}
+            <div className="lg:col-span-6 flex flex-col h-full min-h-0 bg-card">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {tgReviewReceipt?.status !== "pending_review" && (
+                  <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span>
+                      {tgReviewReceipt?.status === "verified"
+                        ? "This receipt has already been verified and converted to an ERP receipt. Fields are read-only."
+                        : "This receipt was rejected. Fields are read-only."}
+                    </span>
+                  </div>
+                )}
+
+                {/* Customer Info */}
+                <div className="space-y-2 rounded-xl border border-border/60 bg-muted/5 p-3.5">
+                  <span className="text-xs font-bold text-foreground">Customer Information</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Customer Name</Label>
+                      <Input
+                        value={tgCustName}
+                        onChange={(e) => setTgCustName(e.target.value)}
+                        placeholder="e.g. Rahul Sharma"
+                        disabled={tgReviewReceipt?.status !== "pending_review"}
+                        className="h-8 text-xs rounded-lg bg-background"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Mobile Number</Label>
+                      <Input
+                        value={tgCustMobile}
+                        onChange={(e) => setTgCustMobile(e.target.value)}
+                        placeholder="e.g. 9876543210"
+                        disabled={tgReviewReceipt?.status !== "pending_review"}
+                        className="h-8 text-xs rounded-lg bg-background"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Address / Area</Label>
+                    <Input
+                      value={tgCustAddress}
+                      onChange={(e) => setTgCustAddress(e.target.value)}
+                      placeholder="e.g. Sector 14, Gurgaon"
+                      disabled={tgReviewReceipt?.status !== "pending_review"}
+                      className="h-8 text-xs rounded-lg bg-background"
+                    />
+                  </div>
+                </div>
+
+                {/* Receipt Details */}
+                <div className="space-y-2 rounded-xl border border-border/60 bg-muted/5 p-3.5">
+                  <span className="text-xs font-bold text-foreground">Receipt Details</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Purchase Date</Label>
+                      <Input
+                        type="date"
+                        value={tgPurchaseDate}
+                        onChange={(e) => setTgPurchaseDate(e.target.value)}
+                        disabled={tgReviewReceipt?.status !== "pending_review"}
+                        className="h-8 text-xs rounded-lg bg-background"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Payment Mode</Label>
+                      <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                        {["cash", "upi", "bank_transfer"].map((m) => (
+                          <Button
+                            key={m}
+                            type="button"
+                            size="sm"
+                            variant={tgPaymentMode === m ? "default" : "outline"}
+                            disabled={tgReviewReceipt?.status !== "pending_review"}
+                            onClick={() => setTgPaymentMode(m)}
+                            className="h-7 text-[10px] uppercase font-bold rounded-lg cursor-pointer px-1"
+                          >
+                            {m.replace("_", " ")}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Notes / Remarks</Label>
+                    <Input
+                      value={tgNotes}
+                      onChange={(e) => setTgNotes(e.target.value)}
+                      placeholder="Additional notes..."
+                      disabled={tgReviewReceipt?.status !== "pending_review"}
+                      className="h-8 text-xs rounded-lg bg-background"
+                    />
+                  </div>
+                </div>
+
+                {/* Line Items Editor */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-foreground">Line Items</span>
+                      <span className="text-[11px] text-muted-foreground ml-1.5">
+                        (Free-text, fully editable)
+                      </span>
+                    </div>
+                    {tgReviewReceipt?.status === "pending_review" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={addTgItemRow}
+                        className="h-6 text-[11px] px-2.5 rounded-lg cursor-pointer gap-1"
+                      >
+                        <Plus className="h-3 w-3" /> Add Item
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {tgLineItems.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="grid grid-cols-12 gap-2 items-center rounded-xl border border-border/60 bg-muted/10 p-2.5 text-xs"
+                      >
+                        <div className="col-span-5 space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Item Name</Label>
+                          <Input
+                            value={item.item_name}
+                            onChange={(e) => handleTgItemChange(idx, "item_name", e.target.value)}
+                            placeholder="e.g. Iron, Newspaper, Plastic"
+                            disabled={tgReviewReceipt?.status !== "pending_review"}
+                            className="h-7 text-xs rounded-lg bg-background"
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Qty ({item.unit || "kg"})</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={item.qty}
+                            onChange={(e) =>
+                              handleTgItemChange(
+                                idx,
+                                "qty",
+                                e.target.value !== "" ? Number(e.target.value) : ""
+                              )
+                            }
+                            placeholder="0.00"
+                            disabled={tgReviewReceipt?.status !== "pending_review"}
+                            className="h-7 text-xs rounded-lg bg-background"
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Rate (₹)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={item.rate}
+                            onChange={(e) =>
+                              handleTgItemChange(
+                                idx,
+                                "rate",
+                                e.target.value !== "" ? Number(e.target.value) : ""
+                              )
+                            }
+                            placeholder="0.00"
+                            disabled={tgReviewReceipt?.status !== "pending_review"}
+                            className="h-7 text-xs rounded-lg bg-background"
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-0.5 text-right">
+                          <Label className="text-[10px] text-muted-foreground">Amount</Label>
+                          <div className="h-7 flex items-center justify-end font-semibold text-foreground text-xs">
+                            ₹{(Number(item.qty || 0) * Number(item.rate || 0)).toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="col-span-1 flex justify-center pt-3">
+                          {tgReviewReceipt?.status === "pending_review" && tgLineItems.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeTgItemRow(idx)}
+                              className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                              title="Delete Item"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Computed Running Total */}
+                  <div className="rounded-xl border border-border bg-primary/5 p-3 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-muted-foreground">Computed Total Amount:</span>
+                    <span className="text-base font-bold text-primary">
+                      ₹ {tgComputedSubtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 border-t border-border bg-card flex items-center justify-between gap-3 shrink-0">
+                {tgReviewReceipt?.status === "pending_review" && isAdmin ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRejectFromReview}
+                      className="text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl cursor-pointer"
+                    >
+                      <XCircle className="h-4 w-4 mr-1.5" /> Reject
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={tgSaving || tgApproving}
+                        onClick={handleSaveTgReview}
+                        className="rounded-xl cursor-pointer gap-1.5 font-medium"
+                      >
+                        {tgSaving ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Save className="h-3.5 w-3.5" />
+                        )}
+                        Save Changes
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={tgSaving || tgApproving}
+                        onClick={handleApproveFromReview}
+                        className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer gap-1.5 shadow-sm"
+                      >
+                        {tgApproving ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        )}
+                        Approve & Create Receipt
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-end w-full">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTgReviewOpen(false)}
+                      className="rounded-xl cursor-pointer"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
