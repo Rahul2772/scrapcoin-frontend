@@ -54,7 +54,7 @@ function loadImageBase64(url: string): Promise<string | null> {
   });
 }
 
-export async function generateStandardPDF(options: PDFDocumentOptions) {
+export async function buildStandardPDFDoc(options: PDFDocumentOptions): Promise<any> {
   const windowObj = window as any;
   if (!windowObj.jspdf) {
     await new Promise<void>((resolve, reject) => {
@@ -287,10 +287,19 @@ export async function generateStandardPDF(options: PDFDocumentOptions) {
   const footerTxt = "Document generated using The Scrap Co. ERP System";
   doc.text(footerTxt, PW / 2 - doc.getTextWidth(footerTxt) / 2, PH - 3);
 
-  // Auto-print / open preview
+  return doc;
+}
+
+export async function generateStandardPDF(options: PDFDocumentOptions): Promise<void> {
+  const doc = await buildStandardPDFDoc(options);
   doc.autoPrint();
   const pdfBlob = doc.output("bloburl");
   window.open(pdfBlob, "_blank");
+}
+
+export async function generateStandardPDFBlobUrl(options: PDFDocumentOptions): Promise<string> {
+  const doc = await buildStandardPDFDoc(options);
+  return doc.output("bloburl");
 }
 
 /**

@@ -61,7 +61,7 @@ export const Route = createLazyFileRoute("/admin/erp/receipts")({
   component: ERPReceiptsPage,
 });
 
-import { generateStandardPDF, generateReceiptImage } from "@/lib/pdfGenerator";
+import { generateStandardPDF, generateStandardPDFBlobUrl, generateReceiptImage } from "@/lib/pdfGenerator";
 
 // PDF Generator for B2C Receipts using standard format
 async function generateReceiptPDF(r: GroupedERPPurchaseReceipt) {
@@ -158,6 +158,7 @@ function ERPReceiptsPage() {
   const [tgReviewReceipt, setTgReviewReceipt] = useState<TelegramReceipt | null>(null);
   const [tgReviewPdfUrl, setTgReviewPdfUrl] = useState<string | null>(null);
   const [tgReviewPdfLoading, setTgReviewPdfLoading] = useState(false);
+  const [tgPdfSource, setTgPdfSource] = useState<"original" | "rendered" | "none">("none");
   const [tgSaving, setTgSaving] = useState(false);
   const [tgApproving, setTgApproving] = useState(false);
 
@@ -372,19 +373,62 @@ function ERPReceiptsPage() {
     setTgLineItems(items);
     setTgReviewOpen(true);
 
-    // Fetch signed PDF URL
+    // Fetch signed PDF URL or generate fallback standard receipt preview
     setTgReviewPdfLoading(true);
     setTgReviewPdfUrl(null);
+    setTgPdfSource("none");
+
+    let loaded = false;
     try {
       const res = await fetchTelegramReceiptPdfUrl(r.id, session?.access_token);
       if (res.success && res.url) {
         setTgReviewPdfUrl(res.url);
+        setTgPdfSource("original");
+        loaded = true;
       }
-    } catch {
-      // ignore
-    } finally {
-      setTgReviewPdfLoading(false);
+    } catch (fetchErr) {
+      console.warn("[Telegram Review] Original PDF fetch failed:", fetchErr);
     }
+
+    // Fallback: If original PDF file is not in storage (e.g. storage upload failed during ingestion),
+    // generate the official standard ScrapCo PDF preview from parsed line items!
+    if (!loaded) {
+      try {
+        const rawList = r.line_items && r.line_items.length > 0 ? r.line_items : [];
+        const parsedItems = rawList.map((li, idx) => ({
+          sNo: idx + 1,
+          name: li.item_name || "Item",
+          qty: Number(li.qty || 0),
+          unit: li.unit || "KGS",
+          rate: Number(li.rate || 0),
+          amount: Number(li.amount || (Number(li.qty || 0) * Number(li.rate || 0))),
+        }));
+
+        const blobUrl = await generateStandardPDFBlobUrl({
+          docType: "PURCHASE",
+          docNumber: r.purchase_no ? `TG-${r.purchase_no}` : `TG-${r.id.split("-")[0]}`,
+          docDate: r.purchase_date || r.created_at,
+          partyTitle: "BILL FROM",
+          partyName: r.customer_name || "Walk-in Customer",
+          partyMobile: r.customer_mobile || "",
+          partyAddress: r.customer_address || "",
+          paymentMethod: r.payment_mode || "CASH",
+          paidAmount: r.paid_amount ?? (r.total_amount ?? undefined),
+          balanceAmount: r.balance ?? 0,
+          notes: r.notes || undefined,
+          items: parsedItems.length > 0 ? parsedItems : [
+            { sNo: 1, name: "Scrap Material", qty: 1, unit: "KGS", rate: 0, amount: 0 }
+          ],
+        });
+
+        setTgReviewPdfUrl(blobUrl);
+        setTgPdfSource("rendered");
+      } catch (genErr) {
+        console.error("[Telegram Review] Failed to generate PDF preview:", genErr);
+      }
+    }
+
+    setTgReviewPdfLoading(false);
   }
 
   async function handleSaveTgReview() {
@@ -1355,10 +1399,18 @@ function ERPReceiptsPage() {
             {/* LEFT: PDF Preview */}
             <div className="lg:col-span-6 flex flex-col h-full bg-muted/20 min-h-0">
               <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                <span>Original Ingested PDF</span>
-                {tgReviewReceipt?.pdf_storage_path && (
+                <span className="flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-primary" />
+                  {tgPdfSource === "original" ? "Original Ingested PDF" : "Standard Receipt Preview"}
+                </span>
+                {tgPdfSource === "original" && tgReviewReceipt?.pdf_storage_path && (
                   <span className="text-[10px] font-mono opacity-70 truncate max-w-[220px]">
                     {tgReviewReceipt.pdf_storage_path.split("/").pop()}
+                  </span>
+                )}
+                {tgPdfSource === "rendered" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium">
+                    Rendered from Parsed Data
                   </span>
                 )}
               </div>
@@ -1369,11 +1421,17 @@ function ERPReceiptsPage() {
                     <span className="text-xs">Loading PDF document…</span>
                   </div>
                 ) : tgReviewPdfUrl ? (
-                  <iframe
-                    src={tgReviewPdfUrl}
+                  <object
+                    data={tgReviewPdfUrl}
+                    type="application/pdf"
                     className="w-full h-full border-0 bg-white"
-                    title="Telegram Receipt PDF Preview"
-                  />
+                  >
+                    <iframe
+                      src={tgReviewPdfUrl}
+                      className="w-full h-full border-0 bg-white"
+                      title="Telegram Receipt PDF Preview"
+                    />
+                  </object>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center p-6 text-center text-muted-foreground">
                     <FileText className="h-10 w-10 mb-2 opacity-30" />
