@@ -146,6 +146,12 @@ function ERPReceiptsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
+  // ── B2C View Receipt Modal State ──────────────────────────────────────────
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewReceipt, setViewReceipt] = useState<GroupedERPPurchaseReceipt | null>(null);
+  const [viewReceiptPdfUrl, setViewReceiptPdfUrl] = useState<string | null>(null);
+  const [viewReceiptPdfLoading, setViewReceiptPdfLoading] = useState(false);
+
   // ── Telegram state ────────────────────────────────────────────────────────
   const [tgReceipts, setTgReceipts] = useState<TelegramReceipt[]>([]);
   const [allPendingTgReceipts, setAllPendingTgReceipts] = useState<TelegramReceipt[]>([]);
@@ -299,6 +305,53 @@ function ERPReceiptsPage() {
       toast.error(err.message || "Failed to load receipts");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function openViewReceipt(r: GroupedERPPurchaseReceipt) {
+    setViewReceipt(r);
+    setViewDialogOpen(true);
+    setViewReceiptPdfLoading(true);
+    setViewReceiptPdfUrl(null);
+
+    try {
+      const rawItems = r.materials || [
+        {
+          material_name: r.material_name,
+          weight: r.weight,
+          unit: r.unit,
+          price_per_unit: r.price_per_unit,
+          total_amount: r.total_amount,
+        },
+      ];
+
+      const blobUrl = await generateStandardPDFBlobUrl({
+        docType: "PURCHASE",
+        docNumber: r.receipt_number,
+        docDate: r.created_at,
+        partyTitle: "BILL FROM",
+        partyName: r.customer_name || "Walk-in Customer",
+        partyMobile: r.customer_phone || "",
+        paymentMethod: r.payment_method || "CASH",
+        paidAmount: r.total_amount,
+        balanceAmount: 0,
+        notes: r.notes || undefined,
+        items: rawItems.map((item, idx) => ({
+          sNo: idx + 1,
+          name: item.material_name,
+          qty: item.weight,
+          unit: item.unit || "KGS",
+          rate: item.price_per_unit,
+          amount: item.total_amount,
+        })),
+      });
+
+      setViewReceiptPdfUrl(blobUrl);
+    } catch (err) {
+      console.error("Failed to generate receipt PDF:", err);
+      toast.error("Failed to generate receipt preview");
+    } finally {
+      setViewReceiptPdfLoading(false);
     }
   }
 
@@ -903,6 +956,15 @@ function ERPReceiptsPage() {
                     <td className="px-6 py-4 text-right font-bold text-foreground">₹{r.total_amount.toLocaleString()}</td>
                     <td className="px-6 py-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openViewReceipt(r)}
+                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+                          title="View Receipt (Popup)"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1732,6 +1794,113 @@ function ERPReceiptsPage() {
                 )}
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── B2C View Receipt Popup Modal ────────────────────────────────────── */}
+      <Dialog
+        open={viewDialogOpen}
+        onOpenChange={(open) => {
+          setViewDialogOpen(open);
+          if (!open && viewReceiptPdfUrl) {
+            try { URL.revokeObjectURL(viewReceiptPdfUrl); } catch (_) {}
+            setViewReceiptPdfUrl(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl h-[88vh] p-0 flex flex-col overflow-hidden rounded-2xl border border-border/80 shadow-2xl">
+          {/* Header */}
+          <DialogHeader className="px-5 py-3.5 border-b border-border bg-card shrink-0 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <FileText className="h-4 w-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                  Receipt {viewReceipt?.receipt_number}
+                  <span className="text-[11px] font-normal text-muted-foreground">
+                    ({viewReceipt?.customer_name || "Walk-in Customer"})
+                  </span>
+                </DialogTitle>
+                <div className="text-[11px] text-muted-foreground">
+                  {viewReceipt?.created_at && new Date(viewReceipt.created_at).toLocaleString("en-IN")} • Amount: ₹{viewReceipt?.total_amount.toLocaleString("en-IN")}
+                </div>
+              </div>
+            </div>
+
+            {/* Header Actions */}
+            {viewReceipt && (
+              <div className="flex items-center gap-2 pr-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => generateReceiptPDF(viewReceipt)}
+                  className="h-8 rounded-xl text-xs gap-1.5 cursor-pointer"
+                  title="Print Receipt"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Print
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    toast.promise(generateReceiptImageFile(viewReceipt), {
+                      loading: "Generating image…",
+                      success: "Receipt image downloaded!",
+                      error: (e) => `Image failed: ${e?.message ?? e}`,
+                    });
+                  }}
+                  className="h-8 rounded-xl text-xs gap-1.5 cursor-pointer hover:text-emerald-600"
+                  title="Download as WhatsApp Image"
+                >
+                  <ImageDown className="h-3.5 w-3.5" />
+                  WhatsApp
+                </Button>
+                {viewReceiptPdfUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                    className="h-8 rounded-xl text-xs gap-1.5"
+                    title="Open PDF in new window"
+                  >
+                    <a href={viewReceiptPdfUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open
+                    </a>
+                  </Button>
+                )}
+              </div>
+            )}
+          </DialogHeader>
+
+          {/* PDF Preview Body */}
+          <div className="flex-1 min-h-0 bg-muted/20 relative flex items-center justify-center">
+            {viewReceiptPdfLoading ? (
+              <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground p-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-xs font-medium">Generating receipt preview…</span>
+              </div>
+            ) : viewReceiptPdfUrl ? (
+              <object
+                data={viewReceiptPdfUrl}
+                type="application/pdf"
+                className="w-full h-full border-0 bg-white"
+              >
+                <iframe
+                  src={viewReceiptPdfUrl}
+                  className="w-full h-full border-0 bg-white"
+                  title="Receipt PDF Preview"
+                />
+              </object>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                <FileText className="h-10 w-10 mb-2 opacity-30" />
+                <p className="text-xs">Failed to render receipt preview.</p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
