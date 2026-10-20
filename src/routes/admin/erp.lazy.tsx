@@ -13,6 +13,7 @@ import {
   Receipt,
   MessageSquare,
   Bell,
+  Banknote,
 } from "lucide-react";
 
 export const Route = createLazyFileRoute("/admin/erp")({
@@ -27,6 +28,7 @@ const ERP_TABS = [
   { to: "/admin/erp/invoices", label: "Invoices", icon: FileText, exact: false },
   { to: "/admin/erp/customers", label: "Customers (B2C)", icon: Users, exact: false },
   { to: "/admin/erp/receipts", label: "Receipts (B2C)", icon: Receipt, exact: false },
+  { to: "/admin/erp/expenses", label: "Expenses", icon: Banknote, exact: false },
   { to: "/admin/erp/whatsapp", label: "WhatsApp Logs", icon: MessageSquare, exact: false },
   { to: "/admin/erp/notifications", label: "Notifications", icon: Bell, exact: false },
 ];

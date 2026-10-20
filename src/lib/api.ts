@@ -612,3 +612,116 @@ export async function fetchTelegramReceiptPdfUrl(
 ): Promise<{ success: boolean; url: string }> {
   return authFetch(`${API_BASE}/api/telegram/receipts/${id}/pdf`, token);
 }
+
+// ── OPERATIONAL EXPENSES ──────────────────────────────────────────────────────
+
+export type ERPExpenseCategory = {
+  id: string;
+  name: string;
+};
+
+export type ERPExpense = {
+  id: string;
+  expense_number: string;
+  category_id?: string | null;
+  amount: number;
+  expense_date: string;
+  description?: string | null;
+  vendor?: string | null;
+  payment_method: string;
+  receipt_url?: string | null;
+  is_recurring: boolean;
+  paid_by: "company" | "champion";
+  approval_status: "pending" | "approved" | "rejected";
+  reimbursement_status: "not_applicable" | "pending" | "reimbursed";
+  is_void: boolean;
+  gst_amount: number;
+  vendor_gstin?: string | null;
+  created_at: string;
+  updated_at: string;
+  erp_expense_categories?: { id: string; name: string } | null;
+};
+
+export type ERPExpenseSummary = {
+  this_month_total: number;
+  last_month_total: number;
+  pct_change: number | null;
+  top_category: string | null;
+  by_category: { name: string; total: number; count: number }[];
+  monthly_trend: { month: string; total: number }[];
+};
+
+export async function fetchERPExpenseCategories(
+  token?: string
+): Promise<{ success: boolean; categories: ERPExpenseCategory[] }> {
+  return authFetch(`${API_BASE}/api/erp/expenses/categories`, token);
+}
+
+export async function fetchERPExpenseSummary(
+  token?: string,
+  from?: string,
+  to?: string
+): Promise<{ success: boolean; summary: ERPExpenseSummary }> {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to)   params.set("to", to);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  return authFetch(`${API_BASE}/api/erp/expenses/summary${qs}`, token);
+}
+
+export async function fetchERPExpenses(
+  token?: string,
+  params: Record<string, string> = {}
+): Promise<{ success: boolean; count: number; page: number; expenses: ERPExpense[] }> {
+  const ts = Date.now();
+  const q = new URLSearchParams({ ...params, _t: ts.toString() }).toString();
+  return authFetch(`${API_BASE}/api/erp/expenses?${q}`, token, { cache: "no-store" });
+}
+
+export async function createERPExpense(
+  payload: Partial<ERPExpense>,
+  token?: string
+): Promise<{ success: boolean; expense: ERPExpense }> {
+  return authFetch(`${API_BASE}/api/erp/expenses`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateERPExpense(
+  id: string,
+  payload: Partial<ERPExpense>,
+  token?: string
+): Promise<{ success: boolean; expense: ERPExpense }> {
+  return authFetch(`${API_BASE}/api/erp/expenses/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteERPExpense(
+  id: string,
+  token?: string
+): Promise<{ success: boolean; message: string }> {
+  return authFetch(`${API_BASE}/api/erp/expenses/${id}`, token, {
+    method: "DELETE",
+  });
+}
+
+export async function uploadERPExpenseReceipt(
+  base64: string,
+  mime_type: string,
+  token?: string
+): Promise<{ success: boolean; path: string; signed_url: string | null }> {
+  return authFetch(`${API_BASE}/api/erp/expenses/upload-receipt`, token, {
+    method: "POST",
+    body: JSON.stringify({ base64, mime_type }),
+  });
+}
+
+export async function fetchERPExpenseReceiptUrl(
+  id: string,
+  token?: string
+): Promise<{ success: boolean; url: string }> {
+  return authFetch(`${API_BASE}/api/erp/expenses/${id}/receipt-url`, token);
+}

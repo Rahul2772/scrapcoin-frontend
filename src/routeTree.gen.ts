@@ -36,6 +36,7 @@ import { Route as AdminErpReceiptsRouteImport } from './routes/admin/erp/receipt
 import { Route as AdminErpNotificationsRouteImport } from './routes/admin/erp/notifications'
 import { Route as AdminErpMaterialsRouteImport } from './routes/admin/erp/materials'
 import { Route as AdminErpInvoicesRouteImport } from './routes/admin/erp/invoices'
+import { Route as AdminErpExpensesRouteImport } from './routes/admin/erp/expenses'
 import { Route as AdminErpCustomersRouteImport } from './routes/admin/erp/customers'
 
 const TermsRoute = TermsRouteImport.update({
@@ -193,6 +194,13 @@ const AdminErpInvoicesRoute = AdminErpInvoicesRouteImport.update({
 } as any).lazy(() =>
   import('./routes/admin/erp/invoices.lazy').then((d) => d.Route),
 )
+const AdminErpExpensesRoute = AdminErpExpensesRouteImport.update({
+  id: '/expenses',
+  path: '/expenses',
+  getParentRoute: () => AdminErpRoute,
+} as any).lazy(() =>
+  import('./routes/admin/erp/expenses.lazy').then((d) => d.Route),
+)
 const AdminErpCustomersRoute = AdminErpCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
@@ -222,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/erp/customers': typeof AdminErpCustomersRoute
+  '/admin/erp/expenses': typeof AdminErpExpensesRoute
   '/admin/erp/invoices': typeof AdminErpInvoicesRoute
   '/admin/erp/materials': typeof AdminErpMaterialsRoute
   '/admin/erp/notifications': typeof AdminErpNotificationsRoute
@@ -251,6 +260,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/admin': typeof AdminIndexRoute
   '/admin/erp/customers': typeof AdminErpCustomersRoute
+  '/admin/erp/expenses': typeof AdminErpExpensesRoute
   '/admin/erp/invoices': typeof AdminErpInvoicesRoute
   '/admin/erp/materials': typeof AdminErpMaterialsRoute
   '/admin/erp/notifications': typeof AdminErpNotificationsRoute
@@ -282,6 +292,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/erp/customers': typeof AdminErpCustomersRoute
+  '/admin/erp/expenses': typeof AdminErpExpensesRoute
   '/admin/erp/invoices': typeof AdminErpInvoicesRoute
   '/admin/erp/materials': typeof AdminErpMaterialsRoute
   '/admin/erp/notifications': typeof AdminErpNotificationsRoute
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/'
     | '/admin/erp/customers'
+    | '/admin/erp/expenses'
     | '/admin/erp/invoices'
     | '/admin/erp/materials'
     | '/admin/erp/notifications'
@@ -343,6 +355,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin'
     | '/admin/erp/customers'
+    | '/admin/erp/expenses'
     | '/admin/erp/invoices'
     | '/admin/erp/materials'
     | '/admin/erp/notifications'
@@ -373,6 +386,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/'
     | '/admin/erp/customers'
+    | '/admin/erp/expenses'
     | '/admin/erp/invoices'
     | '/admin/erp/materials'
     | '/admin/erp/notifications'
@@ -596,6 +610,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminErpInvoicesRouteImport
       parentRoute: typeof AdminErpRoute
     }
+    '/admin/erp/expenses': {
+      id: '/admin/erp/expenses'
+      path: '/expenses'
+      fullPath: '/admin/erp/expenses'
+      preLoaderRoute: typeof AdminErpExpensesRouteImport
+      parentRoute: typeof AdminErpRoute
+    }
     '/admin/erp/customers': {
       id: '/admin/erp/customers'
       path: '/customers'
@@ -608,6 +629,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminErpRouteChildren {
   AdminErpCustomersRoute: typeof AdminErpCustomersRoute
+  AdminErpExpensesRoute: typeof AdminErpExpensesRoute
   AdminErpInvoicesRoute: typeof AdminErpInvoicesRoute
   AdminErpMaterialsRoute: typeof AdminErpMaterialsRoute
   AdminErpNotificationsRoute: typeof AdminErpNotificationsRoute
@@ -620,6 +642,7 @@ interface AdminErpRouteChildren {
 
 const AdminErpRouteChildren: AdminErpRouteChildren = {
   AdminErpCustomersRoute: AdminErpCustomersRoute,
+  AdminErpExpensesRoute: AdminErpExpensesRoute,
   AdminErpInvoicesRoute: AdminErpInvoicesRoute,
   AdminErpMaterialsRoute: AdminErpMaterialsRoute,
   AdminErpNotificationsRoute: AdminErpNotificationsRoute,
