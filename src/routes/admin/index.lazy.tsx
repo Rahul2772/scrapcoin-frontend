@@ -14,10 +14,20 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
+import { TrendingUp, TrendingDown, RotateCw } from "lucide-react";
+import { fetchERPExpenseSummary, type ERPExpenseSummary } from "@/lib/api";
 
 export const Route = createLazyFileRoute("/admin/")({
   component: AdminDashboard,
 });
+
+function fmtCurrency(amount: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
 
 type Booking = {
   id: string;
@@ -42,6 +52,9 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expenseSummary, setExpenseSummary] = useState<ERPExpenseSummary | null>(null);
+  const [expenseLoading, setExpenseLoading] = useState(true);
+  const [expenseError, setExpenseError] = useState(false);
 
   // FIXED — waits for both auth AND profile to load
   useEffect(() => {
@@ -52,18 +65,44 @@ function AdminDashboard() {
 
   useEffect(() => {
     if (!session?.access_token) return;
+    let cancelled = false;
+
     async function fetchBookings() {
       try {
         const res = await fetch(`${API_BASE}/api/bookings`, {
           headers: { Authorization: `Bearer ${session!.access_token}` },
         });
         if (!res.ok) throw new Error("Failed");
-        setBookings(await res.json());
+        if (!cancelled) setBookings(await res.json());
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
+
+    async function fetchExpenses() {
+      setExpenseLoading(true);
+      setExpenseError(false);
+      try {
+        const res = await fetchERPExpenseSummary(session!.access_token);
+        if (cancelled) return;
+        if (res.success && res.summary) {
+          setExpenseSummary(res.summary);
+        } else {
+          setExpenseError(true);
+        }
+      } catch {
+        if (!cancelled) setExpenseError(true);
+      } finally {
+        if (!cancelled) setExpenseLoading(false);
+      }
+    }
+
     fetchBookings();
+    fetchExpenses();
+
+    return () => {
+      cancelled = true;
+    };
   }, [session]);
 
   const statusCounts = [
@@ -83,9 +122,9 @@ function AdminDashboard() {
       <AdminLayout>
         <div className="space-y-6">
           <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-24 rounded-2xl" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl" />
             ))}
           </div>
           <Skeleton className="h-64 rounded-2xl" />
@@ -101,7 +140,7 @@ function AdminDashboard() {
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="rounded-2xl border border-border/60 bg-card p-5">
             <p className="text-sm text-muted-foreground">Total Bookings</p>
             <p className="mt-1 text-3xl font-bold text-foreground">
@@ -119,6 +158,86 @@ function AdminDashboard() {
             <p className="mt-1 text-3xl font-bold text-green-600">
               {bookings.filter((b) => b.status === "completed").length}
             </p>
+          </div>
+
+          {/* Expenses Card */}
+          <div
+            id="dashboard-expenses-card"
+            onClick={() => navigate({ to: "/admin/erp/expenses" })}
+            className="rounded-2xl border border-border/60 bg-card p-5 cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all flex flex-col justify-between"
+            title="Click to view Operational Expenses"
+          >
+            <div>
+              <p className="text-sm text-muted-foreground flex items-center gap-1.5 font-medium">
+                <span>💸</span> Total Expenses · This Month
+              </p>
+
+              {expenseLoading ? (
+                <div className="mt-2 space-y-1.5">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              ) : expenseError ? (
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-3xl font-bold text-muted-foreground">—</p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (session?.access_token) {
+                        setExpenseLoading(true);
+                        setExpenseError(false);
+                        fetchERPExpenseSummary(session.access_token)
+                          .then((r) => {
+                            if (r.success) setExpenseSummary(r.summary);
+                            else setExpenseError(true);
+                          })
+                          .catch(() => setExpenseError(true))
+                          .finally(() => setExpenseLoading(false));
+                      }
+                    }}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <RotateCw className="h-3 w-3" /> Retry
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-3xl font-bold text-foreground">
+                    {fmtCurrency(expenseSummary?.this_month_total ?? expenseSummary?.total_approved ?? 0)}
+                  </p>
+                  <div className="mt-1 flex items-center gap-1">
+                    {expenseSummary?.pct_change !== null && expenseSummary?.pct_change !== undefined ? (
+                      <span
+                        className={`inline-flex items-center gap-1 text-xs font-semibold ${
+                          expenseSummary.pct_change > 0
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        {expenseSummary.pct_change > 0 ? (
+                          <>
+                            <TrendingUp className="h-3.5 w-3.5" />
+                            ↗ {expenseSummary.pct_change}% vs last month
+                          </>
+                        ) : (
+                          <>
+                            <TrendingDown className="h-3.5 w-3.5" />
+                            ↘ {Math.abs(expenseSummary.pct_change)}% vs last month
+                          </>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">No previous data</span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-border/40 text-xs text-muted-foreground flex items-center justify-between">
+              <span>YTD {fmtCurrency(expenseSummary?.year_to_date ?? 0)}</span>
+              <span>{expenseSummary?.pending_count ?? 0} pending</span>
+            </div>
           </div>
         </div>
 

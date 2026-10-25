@@ -14,6 +14,7 @@ import {
   type ERPExpenseCategory,
   type ERPExpenseSummary,
 } from "@/lib/api";
+import { getCategoryBadge, sortCategories } from "@/lib/expense-categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -91,7 +92,7 @@ function SummaryCards({ summary, loading }: { summary: ERPExpenseSummary | null;
     },
     {
       label: "Top Category",
-      value: summary.top_category || "—",
+      value: summary.top_category ? getCategoryBadge(summary.top_category).fullLabel : "—",
       icon: <Tag className="h-5 w-5" />,
       sub: <span className="text-xs text-muted-foreground">Highest spend this month</span>,
       accent: "from-emerald-500/10 to-emerald-500/5",
@@ -237,6 +238,16 @@ function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing 
   }
 
   const todayStr = new Date().toISOString().split("T")[0];
+  const sortedCategories = sortCategories(categories);
+  const formCategories = [...sortedCategories];
+  if (editing?.category_id && editing?.erp_expense_categories?.name) {
+    if (!formCategories.some((c) => c.id === editing.category_id)) {
+      formCategories.push({
+        id: editing.category_id,
+        name: `${editing.erp_expense_categories.name} (legacy)`,
+      });
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -257,7 +268,7 @@ function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing 
                 required
               >
                 <option value="">Select…</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {formCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
@@ -539,15 +550,35 @@ function ERPExpensesPage() {
             className="pl-9 h-8 text-sm"
           />
         </div>
-        <select
-          id="expense-filter-category"
-          value={filterCat}
-          onChange={(e) => { setFilterCat(e.target.value); setPage(1); }}
-          className="h-8 rounded-md border border-input bg-transparent px-2 text-sm min-w-[130px]"
-        >
-          <option value="">All Categories</option>
-          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {(() => {
+          const sortedFilterCats = sortCategories(categories);
+          const filterCategories = [...sortedFilterCats];
+          for (const exp of expenses) {
+            if (exp.category_id && exp.erp_expense_categories?.name) {
+              if (!filterCategories.some((c) => c.id === exp.category_id)) {
+                filterCategories.push({
+                  id: exp.category_id,
+                  name: `${exp.erp_expense_categories.name} (legacy)`,
+                });
+              }
+            }
+          }
+          return (
+            <select
+              id="expense-filter-category"
+              value={filterCat}
+              onChange={(e) => { setFilterCat(e.target.value); setPage(1); }}
+              className="h-8 rounded-md border border-input bg-transparent px-2 text-sm min-w-[140px]"
+            >
+              <option value="">All Categories</option>
+              {filterCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          );
+        })()}
         <Input
           id="expense-filter-from" type="date" value={filterFrom}
           onChange={(e) => { setFilterFrom(e.target.value); setPage(1); }}
@@ -601,9 +632,17 @@ function ERPExpensesPage() {
                   <td className="px-4 py-3 text-xs whitespace-nowrap">{fmtDate(e.expense_date)}</td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{e.expense_number}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                      {e.erp_expense_categories?.name ?? "—"}
-                    </span>
+                    {(() => {
+                      const badge = getCategoryBadge(e.erp_expense_categories?.name);
+                      return (
+                        <span
+                          title={badge.fullLabel}
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium max-w-[170px] truncate ${badge.className}`}
+                        >
+                          {badge.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 max-w-[120px] truncate text-xs">{e.vendor || "—"}</td>
                   <td className="px-4 py-3 max-w-[200px] truncate text-xs text-muted-foreground">

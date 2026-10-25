@@ -643,12 +643,18 @@ export type ERPExpense = {
 };
 
 export type ERPExpenseSummary = {
+  total_approved: number;
   this_month_total: number;
+  previous_period_total: number;
   last_month_total: number;
+  change_pct: number | null;
   pct_change: number | null;
+  year_to_date: number;
+  pending_count: number;
   top_category: string | null;
-  by_category: { name: string; total: number; count: number }[];
+  by_category: { name: string; category?: string; total: number; count: number }[];
   monthly_trend: { month: string; total: number }[];
+  period?: { from: string; to: string };
 };
 
 export async function fetchERPExpenseCategories(
@@ -667,6 +673,18 @@ export async function fetchERPExpenseSummary(
   if (to)   params.set("to", to);
   const qs = params.toString() ? `?${params.toString()}` : "";
   return authFetch(`${API_BASE}/api/erp/expenses/summary${qs}`, token);
+}
+
+export async function fetchDashboardExpenseSummary(
+  token?: string,
+  from?: string,
+  to?: string
+): Promise<{ success: boolean; summary: ERPExpenseSummary }> {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to)   params.set("to", to);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  return authFetch(`${API_BASE}/api/admin/dashboard/expenses${qs}`, token);
 }
 
 export async function fetchERPExpenses(
