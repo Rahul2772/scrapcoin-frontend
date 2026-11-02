@@ -176,6 +176,8 @@ function ERPReceiptsPage() {
   const [tgCustName, setTgCustName] = useState("");
   const [tgCustMobile, setTgCustMobile] = useState("");
   const [tgCustAddress, setTgCustAddress] = useState("");
+  // Where the pre-filled address came from, so the reviewer knows what to double-check
+  const [tgAddressSource, setTgAddressSource] = useState<"receipt" | "pdf" | "customer" | "none">("receipt");
   const [tgPurchaseDate, setTgPurchaseDate] = useState("");
   const [tgPaymentMode, setTgPaymentMode] = useState("cash");
   const [tgNotes, setTgNotes] = useState("");
@@ -423,7 +425,12 @@ function ERPReceiptsPage() {
     setTgReviewReceipt(r);
     setTgCustName(r.customer_name || "");
     setTgCustMobile(r.customer_mobile || "");
-    setTgCustAddress(r.customer_address || "");
+    const pdfAddress = r.address_from_pdf || "";
+    const savedCustomerAddress = r.erp_customers?.address || "";
+    setTgCustAddress(r.customer_address || pdfAddress || savedCustomerAddress);
+    setTgAddressSource(
+      r.customer_address ? "receipt" : pdfAddress ? "pdf" : savedCustomerAddress ? "customer" : "none"
+    );
     setTgPurchaseDate(
       r.purchase_date
         ? new Date(r.purchase_date).toISOString().split("T")[0]
@@ -1583,11 +1590,29 @@ function ERPReceiptsPage() {
                     <Label className="text-[11px]">Address / Area</Label>
                     <Input
                       value={tgCustAddress}
-                      onChange={(e) => setTgCustAddress(e.target.value)}
+                      onChange={(e) => {
+                        setTgCustAddress(e.target.value);
+                        setTgAddressSource("receipt");
+                      }}
                       placeholder="e.g. Sector 14, Gurgaon"
                       disabled={tgReviewReceipt?.status !== "pending_review"}
                       className="h-8 text-xs rounded-lg bg-background"
                     />
+                    {tgReviewReceipt?.status === "pending_review" && tgAddressSource === "pdf" && (
+                      <p className="text-[10px] text-blue-600">
+                        Re-read from the PDF — check it matches before approving.
+                      </p>
+                    )}
+                    {tgReviewReceipt?.status === "pending_review" && tgAddressSource === "customer" && (
+                      <p className="text-[10px] text-blue-600">
+                        Not found on the PDF — filled from the saved customer record.
+                      </p>
+                    )}
+                    {tgReviewReceipt?.status === "pending_review" && tgAddressSource === "none" && (
+                      <p className="text-[10px] text-amber-600">
+                        Address not found on the PDF — check the PDF and type it in.
+                      </p>
+                    )}
                   </div>
                 </div>
 

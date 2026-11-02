@@ -553,6 +553,8 @@ export type TelegramReceipt = {
   created_at: string;
   // joined from erp_customers
   erp_customers?: { name: string; phone: string; address?: string | null } | null;
+  // pending receipts saved without an address: address re-read from the stored PDF text
+  address_from_pdf?: string | null;
 };
 
 export async function fetchTelegramReceipts(
