@@ -155,7 +155,7 @@ function SummaryCards({ summary, loading, labels }: { summary: ERPExpenseSummary
       label: labels.previous,
       value: fmt(summary.last_month_total),
       icon: <Receipt className="h-5 w-5" />,
-      sub: <span className="text-xs text-muted-foreground">Approved expenses</span>,
+      sub: <span className="text-xs text-muted-foreground">Total for {labels.previous}</span>,
       accent: "from-indigo-500/10 to-indigo-500/5",
     },
     {
@@ -169,7 +169,22 @@ function SummaryCards({ summary, loading, labels }: { summary: ERPExpenseSummary
       label: "Categories",
       value: String(summary.by_category.length),
       icon: <FileText className="h-5 w-5" />,
-      sub: <span className="text-xs text-muted-foreground">Active this period</span>,
+      sub: summary.by_category.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {summary.by_category.map((c) => {
+            const badge = getCategoryBadge(c.name);
+            return (
+              <span
+                key={c.name}
+                title={badge.fullLabel + " · " + fmt(c.total)}
+                className={"inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-medium " + badge.className}
+              >
+                {badge.label}
+              </span>
+            );
+          })}
+        </div>
+      ) : <span className="text-xs text-muted-foreground">None {labels.scope}</span>,
       accent: "from-purple-500/10 to-purple-500/5",
     },
   ];
