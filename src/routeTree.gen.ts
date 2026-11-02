@@ -191,9 +191,7 @@ const AdminErpInvoicesRoute = AdminErpInvoicesRouteImport.update({
   id: '/invoices',
   path: '/invoices',
   getParentRoute: () => AdminErpRoute,
-} as any).lazy(() =>
-  import('./routes/admin/erp/invoices.lazy').then((d) => d.Route),
-)
+} as any)
 const AdminErpExpensesRoute = AdminErpExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',

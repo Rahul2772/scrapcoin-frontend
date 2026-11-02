@@ -9,6 +9,7 @@ import {
   updateERPTransaction,
   deleteERPTransaction,
   sendERPWhatsApp,
+  payERPInvoice,
   type ERPTransaction,
   type ERPMaterial,
   type ERPSupplier,
@@ -29,6 +30,9 @@ import {
   Scale,
   Calendar,
   Edit2,
+  CreditCard,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -70,17 +74,18 @@ async function generatePDF(t: GroupedERPTransaction) {
   }];
 
   const totalAmount = rawItems.reduce((sum, item) => sum + Number(item.total_amount), 0);
+  const paid = t.invoice_status === "paid" ? totalAmount : 0;
 
   await generateStandardPDF({
-    docType: "SALE TICKET",
-    docNumber: t.txn_number,
+    docType: "TAX INVOICE",
+    docNumber: t.invoice_number || t.txn_number,
     docDate: t.created_at,
     partyTitle: "BILL TO",
     partyName: t.supplier_name || "Recycler",
     partyMobile: t.supplier_phone || "",
-    paymentMethod: t.payment_method || "CASH",
-    paidAmount: totalAmount,
-    balanceAmount: 0,
+    paymentMethod: t.payment_method || "PENDING",
+    paidAmount: paid,
+    balanceAmount: totalAmount - paid,
     notes: t.notes || undefined,
     items: rawItems.map((item, idx) => ({
       sNo: idx + 1,
@@ -102,6 +107,14 @@ function ERPTransactionsPage() {
   const [suppliers, setSuppliers] = useState<ERPSupplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  // Pay Dialog
+  const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [payingSale, setPayingSale] = useState<GroupedERPTransaction | null>(null);
+  const [settleMethod, setSettleMethod] = useState<"cash" | "upi" | "bank_transfer" | "cheque">("cash");
+  const [settleNotes, setSettleNotes] = useState("");
+  const [paying, setPaying] = useState(false);
 
   // Modals
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -290,8 +303,34 @@ function ERPTransactionsPage() {
     }
   }
 
+  function openPay(t: GroupedERPTransaction) {
+    setPayingSale(t);
+    setSettleMethod("cash");
+    setSettleNotes("");
+    setPayDialogOpen(true);
+  }
+
+  async function handlePay(e: React.FormEvent) {
+    e.preventDefault();
+    if (!payingSale?.invoice_id) return toast.error("This sale has no invoice to settle");
+
+    setPaying(true);
+    try {
+      const res = await payERPInvoice(payingSale.invoice_id, settleMethod, settleNotes.trim() || undefined, session?.access_token);
+      if (res.success) {
+        toast.success("Invoice paid successfully!");
+        setPayDialogOpen(false);
+        loadTransactions();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Payment failed");
+    } finally {
+      setPaying(false);
+    }
+  }
+
   async function handleDelete(id: string) {
-    if (!confirm("Delete transaction? This reverses material inventory levels and deletes B2B invoices. Proceed?")) return;
+    if (!confirm("Delete this sale? This reverses material inventory levels and deletes its invoice. Proceed?")) return;
     try {
       const res = await deleteERPTransaction(id, session?.access_token);
       if (res.success) {
@@ -308,23 +347,88 @@ function ERPTransactionsPage() {
   const calcGst = items.reduce((acc, curr) => acc + ((Number(curr.weight || 0) * Number(curr.price || 0) * Number(curr.gstRate || 0)) / 100), 0);
   const calcTotal = calcSubtotal + calcGst;
 
+  const summary = { paid: { count: 0, total: 0 }, pending: { count: 0, total: 0 }, overdue: { count: 0, total: 0 } };
+  transactions.forEach((t) => {
+    const bucket = summary[(t.invoice_status || "pending") as keyof typeof summary];
+    if (bucket) {
+      bucket.count++;
+      bucket.total += t.total_amount;
+    }
+  });
+
+  const filtered = transactions.filter(
+    (t) =>
+      (statusFilter === "all" || (t.invoice_status || "pending") === statusFilter) &&
+      (t.txn_number.toLowerCase().includes(search.toLowerCase()) ||
+        (t.invoice_number || "").toLowerCase().includes(search.toLowerCase()) ||
+        t.supplier_name.toLowerCase().includes(search.toLowerCase()))
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Summary stats block */}
+      {!loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Paid</span>
+              <p className="text-xl font-bold text-emerald-600">₹{summary.paid.total.toLocaleString("en-IN")}</p>
+              <span className="text-[10px] text-muted-foreground">{summary.paid.count} paid sales</span>
+            </div>
+            <CheckCircle2 className="h-8 w-8 text-emerald-600/30" />
+          </div>
+
+          <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Pending</span>
+              <p className="text-xl font-bold text-amber-600">₹{summary.pending.total.toLocaleString("en-IN")}</p>
+              <span className="text-[10px] text-muted-foreground">{summary.pending.count} unpaid sales</span>
+            </div>
+            <CreditCard className="h-8 w-8 text-amber-500/30" />
+          </div>
+
+          <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Overdue Bills</span>
+              <p className="text-xl font-bold text-red-600">₹{summary.overdue.total.toLocaleString("en-IN")}</p>
+              <span className="text-[10px] text-muted-foreground">{summary.overdue.count} overdue sales</span>
+            </div>
+            <AlertCircle className="h-8 w-8 text-red-500/30" />
+          </div>
+        </div>
+      )}
+
       {/* Filtering Header */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         {/* Search */}
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search transactions list..."
+            placeholder="Search ticket, invoice or recycler..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 rounded-xl border border-border bg-card text-xs"
           />
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2 w-full sm:w-auto justify-end items-center">
+        {/* Status filters + Action Buttons */}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end items-center">
+          <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
+            {["all", "paid", "pending", "overdue"].map((st) => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer transition-all uppercase ${
+                  statusFilter === st
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+
           <Button
             variant="outline"
             size="sm"
@@ -338,8 +442,8 @@ function ERPTransactionsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => exportTransactionsCsv(transactions)}
-            disabled={loading || transactions.length === 0}
+            onClick={() => exportTransactionsCsv(filtered)}
+            disabled={loading || filtered.length === 0}
             className="rounded-xl cursor-pointer gap-1.5"
           >
             <Download className="h-4 w-4" /> Export CSV
@@ -370,29 +474,24 @@ function ERPTransactionsPage() {
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
-                  <th className="px-6 py-4">Ticket ID</th>
+                  <th className="px-6 py-4">Ticket / Invoice</th>
                   <th className="px-6 py-4">Recycler</th>
                   <th className="px-6 py-4">Material</th>
                   <th className="px-6 py-4 text-right">Weighed Qty</th>
                   <th className="px-6 py-4 text-right">Unit Rate</th>
-                  <th className="px-6 py-4 text-right">Payout Total</th>
-                  <th className="px-6 py-4 text-right">Bill Status</th>
+                  <th className="px-6 py-4 text-right">Bill Amount</th>
+                  <th className="px-6 py-4 text-right">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {transactions
-                  .filter(
-                    (t) =>
-                      t.txn_number.toLowerCase().includes(search.toLowerCase()) ||
-                      t.supplier_name.toLowerCase().includes(search.toLowerCase())
-                  )
-                  .map((t) => (
+                {filtered.map((t) => (
                   <tr key={t.id} className="hover:bg-muted/10 transition-colors">
                     <td className="px-6 py-4 font-semibold text-foreground whitespace-nowrap">
                       <div className="flex flex-col">
                         <span>{t.txn_number}</span>
                         <span className="text-[10px] text-muted-foreground font-normal">
+                          {t.invoice_number ? `${t.invoice_number} · ` : ""}
                           {new Date(t.created_at).toLocaleDateString("en-IN")}
                         </span>
                       </div>
@@ -420,9 +519,24 @@ function ERPTransactionsPage() {
                       >
                         {(t.invoice_status || "pending").toUpperCase()}
                       </Badge>
+                      {t.invoice_status !== "paid" && t.due_date && (
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          Due {new Date(t.due_date).toLocaleDateString("en-IN")}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
+                        {t.invoice_status !== "paid" && t.invoice_status !== "cancelled" && t.invoice_id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openPay(t)}
+                            className="rounded-xl font-semibold gap-1 py-1 cursor-pointer h-7 text-[10px]"
+                          >
+                            <CreditCard className="h-3 w-3" /> PAY
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -465,10 +579,12 @@ function ERPTransactionsPage() {
                     </td>
                   </tr>
                 ))}
-                {transactions.length === 0 && (
+                {filtered.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-6 py-10 text-center text-muted-foreground">
-                      No scale transactions ticket recorded yet. Click "Create Scale Ticket" to start.
+                      {transactions.length === 0
+                        ? 'No sales recorded yet. Click "Create Scale Ticket" to start.'
+                        : "No sales match these filters."}
                     </td>
                   </tr>
                 )}
@@ -615,7 +731,7 @@ function ERPTransactionsPage() {
                 <span>₹ {calcGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="border-t border-border pt-2 flex justify-between text-sm font-bold text-foreground">
-                <span>Total Payout Amount:</span>
+                <span>Total Bill Amount:</span>
                 <span className="text-primary">₹ {calcTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
@@ -687,6 +803,79 @@ function ERPTransactionsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay Invoice Dialog */}
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="max-w-md bg-card rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">
+              Record Payment from Recycler
+            </DialogTitle>
+          </DialogHeader>
+
+          {payingSale && (
+            <form onSubmit={handlePay} className="space-y-4">
+              <div className="rounded-xl border border-border bg-muted/10 p-4 text-xs space-y-1.5">
+                <div className="flex justify-between font-medium">
+                  <span className="text-muted-foreground">Invoice / Ticket:</span>
+                  <span className="text-foreground font-bold">{payingSale.invoice_number} · {payingSale.txn_number}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span className="text-muted-foreground">Recycler:</span>
+                  <span className="text-foreground">{payingSale.supplier_name}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-1.5 font-bold text-sm">
+                  <span className="text-foreground">Amount:</span>
+                  <span className="text-primary">₹ {payingSale.total_amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Payment Mode</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { val: "cash", label: "Cash" },
+                    { val: "upi", label: "UPI" },
+                    { val: "bank_transfer", label: "Bank Transfer" },
+                    { val: "cheque", label: "Bank Cheque" },
+                  ].map((m) => (
+                    <Button
+                      key={m.val}
+                      type="button"
+                      variant={settleMethod === m.val ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSettleMethod(m.val as typeof settleMethod)}
+                      className="rounded-xl font-semibold text-xs cursor-pointer h-9"
+                    >
+                      {m.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-notes">Payment Remarks</Label>
+                <Input
+                  id="pay-notes"
+                  value={settleNotes}
+                  onChange={(e) => setSettleNotes(e.target.value)}
+                  placeholder="UPI Ref ID, cheque number..."
+                  className="rounded-xl border border-border"
+                />
+              </div>
+
+              <DialogFooter className="pt-2 border-t border-border/40">
+                <Button type="button" variant="ghost" onClick={() => setPayDialogOpen(false)} className="rounded-xl cursor-pointer">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={paying} className="rounded-xl cursor-pointer">
+                  {paying ? "Saving payment..." : "Mark as Paid"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

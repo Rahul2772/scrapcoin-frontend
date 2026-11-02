@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { type ERPPurchaseReceipt, type ERPTransaction, type ERPInvoice } from "./api";
+import { type ERPPurchaseReceipt, type ERPTransaction } from "./api";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -108,6 +108,7 @@ export interface GroupedERPTransaction {
   invoice_id?: string | null;
   payment_method?: string | null;
   due_date?: string | null;
+  paid_at?: string | null;
   materials: Array<{
     id: string;
     material_id: string;
@@ -168,6 +169,7 @@ export function groupTransactions(rawTxns: ERPTransaction[]): GroupedERPTransact
       invoice_id: baseItem.invoice_id,
       payment_method: baseItem.payment_method,
       due_date: baseItem.due_date,
+      paid_at: baseItem.paid_at,
       materials: items.map((item) => ({
         id: item.id,
         material_id: item.material_id,
@@ -201,105 +203,6 @@ export function groupTransactions(rawTxns: ERPTransaction[]): GroupedERPTransact
     if (!seen.has(baseNumber)) {
       seen.add(baseNumber);
       const group = grouped.find((g) => g.txn_number === baseNumber);
-      if (group) {
-        orderedGrouped.push(group);
-      }
-    }
-  });
-
-  return orderedGrouped;
-}
-
-export interface GroupedERPInvoice {
-  id: string;
-  invoice_number: string;
-  supplier_id: string;
-  supplier_name: string;
-  supplier_phone?: string;
-  txn_number: string;
-  amount: number;
-  status: "pending" | "paid" | "overdue" | "cancelled";
-  due_date?: string | null;
-  paid_at?: string | null;
-  payment_method?: string | null;
-  notes?: string | null;
-  created_at: string;
-  materials: Array<{
-    id: string;
-    transaction_id: string;
-    material_name: string;
-    weight: number;
-    unit: string;
-    price_per_unit: number;
-    amount: number;
-  }>;
-  material_name: string;
-  weight: number;
-  unit: string;
-  transaction_id?: string;
-  price_per_unit?: number;
-}
-
-export function groupInvoices(rawInvoices: ERPInvoice[]): GroupedERPInvoice[] {
-  const groups: { [baseNumber: string]: ERPInvoice[] } = {};
-
-  rawInvoices.forEach((i) => {
-    const baseNumber = i.invoice_number.split("/")[0];
-    if (!groups[baseNumber]) {
-      groups[baseNumber] = [];
-    }
-    groups[baseNumber].push(i);
-  });
-
-  const grouped: GroupedERPInvoice[] = [];
-
-  for (const baseNumber of Object.keys(groups)) {
-    const items = groups[baseNumber];
-    items.sort((a, b) => a.invoice_number.localeCompare(b.invoice_number));
-
-    const baseItem = items[0];
-    const amount = items.reduce((sum, item) => sum + Number(item.amount), 0);
-    const material_name = items.map((item) => item.material_name).join(", ");
-    const total_weight = items.reduce((sum, item) => sum + Number(item.weight), 0);
-
-    grouped.push({
-      id: baseItem.id,
-      invoice_number: baseNumber,
-      supplier_id: baseItem.supplier_id,
-      supplier_name: baseItem.supplier_name,
-      supplier_phone: baseItem.supplier_phone,
-      txn_number: baseItem.txn_number.split("/")[0],
-      amount,
-      status: baseItem.status,
-      due_date: baseItem.due_date,
-      paid_at: baseItem.paid_at,
-      payment_method: baseItem.payment_method,
-      notes: baseItem.notes,
-      created_at: baseItem.created_at,
-      materials: items.map((item) => ({
-        id: item.id,
-        transaction_id: item.transaction_id,
-        material_name: item.material_name,
-        weight: Number(item.weight),
-        unit: item.unit || "kg",
-        price_per_unit: Number(item.price_per_unit),
-        amount: Number(item.amount),
-      })),
-      material_name,
-      weight: total_weight,
-      unit: baseItem.unit || "kg",
-      transaction_id: baseItem.transaction_id,
-      price_per_unit: baseItem.price_per_unit,
-    });
-  }
-
-  const orderedGrouped: GroupedERPInvoice[] = [];
-  const seen = new Set<string>();
-  rawInvoices.forEach((i) => {
-    const baseNumber = i.invoice_number.split("/")[0];
-    if (!seen.has(baseNumber)) {
-      seen.add(baseNumber);
-      const group = grouped.find((g) => g.invoice_number === baseNumber);
       if (group) {
         orderedGrouped.push(group);
       }

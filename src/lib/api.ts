@@ -156,12 +156,12 @@ export type ERPTransaction = {
   invoice_id?: string | null;
   payment_method?: string | null;
   due_date?: string | null;
+  paid_at?: string | null;
 };
 
 export type ERPInvoice = {
   id: string;
   invoice_number: string;
-  transaction_id: string;
   supplier_id: string;
   amount: number;
   status: "pending" | "paid" | "overdue" | "cancelled";
@@ -436,12 +436,6 @@ export async function deleteERPTransaction(txnId: string, token?: string): Promi
   return authFetch(`${API_BASE}/api/erp/transactions/${txnId}`, token, {
     method: "DELETE",
   });
-}
-
-export async function fetchERPInvoices(token?: string, params: Record<string, string> = {}): Promise<{ success: boolean; count: number; summary: any; invoices: ERPInvoice[] }> {
-  const ts = Date.now();
-  const q = new URLSearchParams({ ...params, _t: ts.toString() }).toString();
-  return authFetch(`${API_BASE}/api/erp/invoices?${q}`, token, { cache: "no-store" });
 }
 
 export async function payERPInvoice(invoiceId: string, paymentMethod: string, notes?: string, token?: string): Promise<{ success: boolean; message: string; invoice: ERPInvoice }> {
