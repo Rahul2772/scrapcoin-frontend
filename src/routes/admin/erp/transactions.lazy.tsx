@@ -467,132 +467,205 @@ function ERPTransactionsPage() {
         </div>
       )}
 
-      {/* Transactions Table */}
-      {!loading && (
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
-                  <th className="px-6 py-4">Ticket / Invoice</th>
-                  <th className="px-6 py-4">Recycler</th>
-                  <th className="px-6 py-4">Material</th>
-                  <th className="px-6 py-4 text-right">Weighed Qty</th>
-                  <th className="px-6 py-4 text-right">Unit Rate</th>
-                  <th className="px-6 py-4 text-right">Bill Amount</th>
-                  <th className="px-6 py-4 text-right">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((t) => (
-                  <tr key={t.id} className="hover:bg-muted/10 transition-colors">
-                    <td className="px-6 py-4 font-semibold text-foreground whitespace-nowrap">
-                      <div className="flex flex-col">
-                        <span>{t.txn_number}</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">
+      {/* Sales: cards on small screens, table on md+ */}
+      {!loading && (() => {
+        const materialNames = (t: GroupedERPTransaction) =>
+          t.materials && t.materials.length > 0 ? t.materials.map((m) => m.material_name) : [t.material_name];
+
+        // Show the first few materials as chips; the rest collapse into "+N more" (full list on hover)
+        const MaterialChips = ({ t, max }: { t: GroupedERPTransaction; max: number }) => {
+          const names = materialNames(t);
+          const shown = names.slice(0, max);
+          const hidden = names.length - shown.length;
+          return (
+            <div className="flex flex-wrap gap-1" title={names.join(", ")}>
+              {shown.map((n, i) => (
+                <span key={i} className="rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] text-foreground/80 max-w-[140px] truncate">
+                  {n}
+                </span>
+              ))}
+              {hidden > 0 && (
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  +{hidden} more
+                </span>
+              )}
+            </div>
+          );
+        };
+
+        const StatusBadge = ({ t }: { t: GroupedERPTransaction }) => (
+          <Badge
+            variant="outline"
+            className={`rounded-full text-[10px] px-2 py-0.5 ${
+              INVOICE_STATUS_COLORS[t.invoice_status as keyof typeof INVOICE_STATUS_COLORS] || "bg-gray-100"
+            }`}
+          >
+            {(t.invoice_status || "pending").toUpperCase()}
+          </Badge>
+        );
+
+        const DueDate = ({ t }: { t: GroupedERPTransaction }) =>
+          t.invoice_status !== "paid" && t.due_date ? (
+            <div className="text-[10px] text-muted-foreground mt-1">
+              Due {new Date(t.due_date).toLocaleDateString("en-IN")}
+            </div>
+          ) : null;
+
+        const Actions = ({ t }: { t: GroupedERPTransaction }) => (
+          <div className="flex items-center justify-end gap-1.5">
+            {t.invoice_status !== "paid" && t.invoice_status !== "cancelled" && t.invoice_id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openPay(t)}
+                className="rounded-xl font-semibold gap-1 py-1 cursor-pointer h-7 text-[10px]"
+              >
+                <CreditCard className="h-3 w-3" /> PAY
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openEdit(t)}
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Edit Scale Ticket"
+            >
+              <Edit2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => generatePDF(t)}
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Download Invoice"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleWhatsApp(t)}
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Simulate WhatsApp Send"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </Button>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDelete(t.id)}
+                className="h-7 w-7 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                title="Delete Scale Ticket"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        );
+
+        const rate = (t: GroupedERPTransaction) =>
+          t.materials && t.materials.length > 1 ? "Various" : `₹${t.price_per_unit.toFixed(2)}`;
+
+        if (filtered.length === 0) {
+          return (
+            <div className="rounded-2xl border border-border/60 bg-card px-6 py-10 text-center text-xs text-muted-foreground">
+              {transactions.length === 0
+                ? 'No sales recorded yet. Click "Create Scale Ticket" to start.'
+                : "No sales match these filters."}
+            </div>
+          );
+        }
+
+        return (
+          <>
+            {/* Mobile / small screens */}
+            <div className="space-y-3 md:hidden">
+              {filtered.map((t) => (
+                <div key={t.id} className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-foreground">
+                        {t.txn_number}
+                        <span className="ml-2 text-[10px] font-normal text-muted-foreground">
                           {t.invoice_number ? `${t.invoice_number} · ` : ""}
                           {new Date(t.created_at).toLocaleDateString("en-IN")}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-foreground font-medium truncate max-w-[140px]">{t.supplier_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: t.materials && t.materials.length > 1 ? "#a1a1aa" : t.color_hex }} />
-                        {t.material_name}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold text-foreground whitespace-nowrap">
-                      {t.weight.toLocaleString()} {t.unit}
-                    </td>
-                    <td className="px-6 py-4 text-right text-muted-foreground">
-                      {t.materials && t.materials.length > 1 ? "Various" : `₹${t.price_per_unit.toFixed(2)}`}
-                    </td>
-                    <td className="px-6 py-4 text-right font-bold text-foreground">₹{t.total_amount.toLocaleString("en-IN")}</td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <Badge
-                        variant="outline"
-                        className={`rounded-full text-[10px] px-2 py-0.5 ${
-                          INVOICE_STATUS_COLORS[t.invoice_status as keyof typeof INVOICE_STATUS_COLORS] || "bg-gray-100"
-                        }`}
-                      >
-                        {(t.invoice_status || "pending").toUpperCase()}
-                      </Badge>
-                      {t.invoice_status !== "paid" && t.due_date && (
-                        <div className="text-[10px] text-muted-foreground mt-1">
-                          Due {new Date(t.due_date).toLocaleDateString("en-IN")}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {t.invoice_status !== "paid" && t.invoice_status !== "cancelled" && t.invoice_id && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openPay(t)}
-                            className="rounded-xl font-semibold gap-1 py-1 cursor-pointer h-7 text-[10px]"
-                          >
-                            <CreditCard className="h-3 w-3" /> PAY
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(t)}
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-                          title="Edit Scale Ticket"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => generatePDF(t)}
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-                          title="Download Invoice"
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleWhatsApp(t)}
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-                          title="Simulate WhatsApp Send"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                        {isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(t.id)}
-                            className="h-7 w-7 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                            title="Delete Scale Ticket"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                      <div className="text-xs font-medium text-foreground truncate">{t.supplier_name}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold text-foreground">₹{t.total_amount.toLocaleString("en-IN")}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {t.weight.toLocaleString()} {t.unit} · {rate(t)}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-muted-foreground">
-                      {transactions.length === 0
-                        ? 'No sales recorded yet. Click "Create Scale Ticket" to start.'
-                        : "No sales match these filters."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                    </div>
+                  </div>
+                  <MaterialChips t={t} max={4} />
+                  <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2">
+                    <div>
+                      <StatusBadge t={t} />
+                      <DueDate t={t} />
+                    </div>
+                    <Actions t={t} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet / desktop */}
+            <div className="hidden md:block overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
+                      <th className="px-4 py-4">Ticket / Invoice</th>
+                      <th className="px-4 py-4">Recycler</th>
+                      <th className="px-4 py-4">Material</th>
+                      <th className="px-4 py-4 text-right">Weighed Qty</th>
+                      <th className="px-4 py-4 text-right">Unit Rate</th>
+                      <th className="px-4 py-4 text-right">Bill Amount</th>
+                      <th className="px-4 py-4 text-right">Status</th>
+                      <th className="px-4 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filtered.map((t) => (
+                      <tr key={t.id} className="hover:bg-muted/10 transition-colors">
+                        <td className="px-4 py-4 font-semibold text-foreground whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span>{t.txn_number}</span>
+                            <span className="text-[10px] text-muted-foreground font-normal">
+                              {t.invoice_number ? `${t.invoice_number} · ` : ""}
+                              {new Date(t.created_at).toLocaleDateString("en-IN")}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-foreground font-medium truncate max-w-[140px]">{t.supplier_name}</td>
+                        <td className="px-4 py-4 min-w-[180px] max-w-[300px]">
+                          <MaterialChips t={t} max={3} />
+                        </td>
+                        <td className="px-4 py-4 text-right font-semibold text-foreground whitespace-nowrap">
+                          {t.weight.toLocaleString()} {t.unit}
+                        </td>
+                        <td className="px-4 py-4 text-right text-muted-foreground whitespace-nowrap">{rate(t)}</td>
+                        <td className="px-4 py-4 text-right font-bold text-foreground whitespace-nowrap">₹{t.total_amount.toLocaleString("en-IN")}</td>
+                        <td className="px-4 py-4 text-right whitespace-nowrap">
+                          <StatusBadge t={t} />
+                          <DueDate t={t} />
+                        </td>
+                        <td className="px-4 py-4 text-right whitespace-nowrap">
+                          <Actions t={t} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Weigh Ticket Entry Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
