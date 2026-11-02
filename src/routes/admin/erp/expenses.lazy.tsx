@@ -56,8 +56,76 @@ function fmtDate(d: string) {
   });
 }
 
+// ── Period selection (Indian financial year: Apr–Mar) ─────────────────────────
+type PeriodMode = "all" | "month" | "quarter" | "year" | "custom";
+const PERIOD_MODES: { value: PeriodMode; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "month", label: "Monthly" },
+  { value: "quarter", label: "Quarterly" },
+  { value: "year", label: "Yearly" },
+  { value: "custom", label: "Custom" },
+];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function ymd(y: number, m: number, d: number) {
+  const dt = new Date(y, m, d);
+  return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
+}
+
+// Month index counted from year 0, so offsets can cross year boundaries
+function monthLabel(abs: number) {
+  return MONTH_SHORT[abs % 12] + " " + Math.floor(abs / 12);
+}
+
+function fyLabel(fyStart: number) {
+  return "FY " + fyStart + "-" + String(fyStart + 1).slice(2);
+}
+
+// Range and labels for the period `offset` steps back (0 = current) from today
+function periodRange(mode: "month" | "quarter" | "year", offset: number) {
+  const now = new Date();
+  const abs = now.getFullYear() * 12 + now.getMonth();
+
+  if (mode === "month") {
+    const start = abs + offset;
+    return {
+      from: ymd(Math.floor(start / 12), start % 12, 1),
+      to: ymd(Math.floor(start / 12), (start % 12) + 1, 0),
+      label: monthLabel(start),
+      prevLabel: monthLabel(start - 1),
+    };
+  }
+
+  if (mode === "quarter") {
+    // FY quarters start in Apr, Jul, Oct, Jan
+    const start = abs - (((abs - 3) % 3) + 3) % 3 + offset * 3;
+    const end = start + 2;
+    const qLabel = (s: number) => {
+      const fyStart = s % 12 >= 3 ? Math.floor(s / 12) : Math.floor(s / 12) - 1;
+      const q = Math.floor((((s % 12) - 3 + 12) % 12) / 3) + 1;
+      return "Q" + q + " " + fyLabel(fyStart);
+    };
+    return {
+      from: ymd(Math.floor(start / 12), start % 12, 1),
+      to: ymd(Math.floor(end / 12), (end % 12) + 1, 0),
+      label: qLabel(start) + " (" + MONTH_SHORT[start % 12] + "–" + monthLabel(end) + ")",
+      prevLabel: qLabel(start - 3),
+    };
+  }
+
+  const fyStart = (now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1) + offset;
+  return {
+    from: ymd(fyStart, 3, 1),
+    to: ymd(fyStart + 1, 2, 31),
+    label: fyLabel(fyStart) + " (Apr " + fyStart + "–Mar " + (fyStart + 1) + ")",
+    prevLabel: fyLabel(fyStart - 1),
+  };
+}
+
 // ── Summary Cards ─────────────────────────────────────────────────────────────
-function SummaryCards({ summary, loading }: { summary: ERPExpenseSummary | null; loading: boolean }) {
+interface CardLabels { current: string; previous: string; compare: string; scope: string }
+
+function SummaryCards({ summary, loading, labels }: { summary: ERPExpenseSummary | null; loading: boolean; labels: CardLabels }) {
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -72,19 +140,19 @@ function SummaryCards({ summary, loading }: { summary: ERPExpenseSummary | null;
 
   const cards = [
     {
-      label: "This Month",
+      label: labels.current,
       value: fmt(summary.this_month_total),
       icon: <Wallet className="h-5 w-5" />,
       sub: pct !== null ? (
         <span className={"flex items-center gap-1 text-xs font-medium " + (up ? "text-red-500" : "text-green-500")}>
           {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-          {Math.abs(pct)}% vs last month
+          {Math.abs(pct)}% vs {labels.compare}
         </span>
       ) : <span className="text-xs text-muted-foreground">No previous data</span>,
       accent: "from-amber-500/10 to-amber-500/5",
     },
     {
-      label: "Last Month",
+      label: labels.previous,
       value: fmt(summary.last_month_total),
       icon: <Receipt className="h-5 w-5" />,
       sub: <span className="text-xs text-muted-foreground">Approved expenses</span>,
@@ -94,7 +162,7 @@ function SummaryCards({ summary, loading }: { summary: ERPExpenseSummary | null;
       label: "Top Category",
       value: summary.top_category ? getCategoryBadge(summary.top_category).fullLabel : "—",
       icon: <Tag className="h-5 w-5" />,
-      sub: <span className="text-xs text-muted-foreground">Highest spend this month</span>,
+      sub: <span className="text-xs text-muted-foreground">Highest spend {labels.scope}</span>,
       accent: "from-emerald-500/10 to-emerald-500/5",
     },
     {
@@ -133,13 +201,15 @@ interface FormDialogProps {
   categories: ERPExpenseCategory[];
   token?: string;
   editing: ERPExpense | null;
+  spentByNames: string[];
 }
 
-function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing }: FormDialogProps) {
+function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing, spentByNames }: FormDialogProps) {
   const [categoryId, setCategoryId]         = useState("");
   const [amount, setAmount]                 = useState("");
   const [date, setDate]                     = useState(new Date().toISOString().split("T")[0]);
   const [vendor, setVendor]                 = useState("");
+  const [spentBy, setSpentBy]               = useState("");
   const [description, setDescription]       = useState("");
   const [payMethod, setPayMethod]           = useState<string>("cash");
   const [isRecurring, setIsRecurring]       = useState(false);
@@ -158,6 +228,7 @@ function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing 
       setAmount(String(editing.amount));
       setDate(editing.expense_date);
       setVendor(editing.vendor || "");
+      setSpentBy(editing.spent_by || "");
       setDescription(editing.description || "");
       setPayMethod(editing.payment_method || "cash");
       setIsRecurring(editing.is_recurring);
@@ -168,7 +239,7 @@ function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing 
     } else {
       setCategoryId(""); setAmount("");
       setDate(new Date().toISOString().split("T")[0]);
-      setVendor(""); setDescription(""); setPayMethod("cash");
+      setVendor(""); setSpentBy(""); setDescription(""); setPayMethod("cash");
       setIsRecurring(false); setGstAmount(""); setVendorGstin("");
       setReceiptPath(null); setReceiptPreview(null);
     }
@@ -213,6 +284,7 @@ function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing 
         amount:         Number(amount),
         expense_date:   date,
         vendor:         vendor.trim() || null,
+        spent_by:       spentBy.trim() || null,
         description:    description.trim() || null,
         payment_method: payMethod,
         is_recurring:   isRecurring,
@@ -302,14 +374,27 @@ function ExpenseFormDialog({ open, onClose, onSaved, categories, token, editing 
             </div>
           </div>
 
-          {/* Vendor */}
-          <div className="space-y-1.5">
-            <Label htmlFor="exp-vendor">Vendor</Label>
-            <Input
-              id="exp-vendor" value={vendor}
-              onChange={(e) => setVendor(e.target.value)}
-              placeholder="Shop / company name"
-            />
+          {/* Vendor + Spent by */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="exp-vendor">Vendor</Label>
+              <Input
+                id="exp-vendor" value={vendor}
+                onChange={(e) => setVendor(e.target.value)}
+                placeholder="Shop / company name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="exp-spent-by">Spent By</Label>
+              <Input
+                id="exp-spent-by" value={spentBy} list="exp-spent-by-names" maxLength={100}
+                onChange={(e) => setSpentBy(e.target.value)}
+                placeholder="Who paid / made this expense"
+              />
+              <datalist id="exp-spent-by-names">
+                {spentByNames.map((n) => <option key={n} value={n} />)}
+              </datalist>
+            </div>
           </div>
 
           {/* Description */}
@@ -428,6 +513,8 @@ function ERPExpensesPage() {
   const [filterCat, setFilterCat]   = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo]     = useState("");
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("all");
+  const [periodOffset, setPeriodOffset] = useState(0);
   const [page, setPage]             = useState(1);
   const LIMIT = 30;
 
@@ -435,11 +522,24 @@ function ERPExpensesPage() {
   const [editing, setEditing]         = useState<ERPExpense | null>(null);
   const [receiptModal, setReceiptModal] = useState<{ url: string; isPdf: boolean } | null>(null);
 
+  const period = periodMode === "month" || periodMode === "quarter" || periodMode === "year"
+    ? periodRange(periodMode, periodOffset)
+    : null;
+  const rangeFrom = period ? period.from : periodMode === "custom" ? filterFrom : "";
+  const rangeTo   = period ? period.to   : periodMode === "custom" ? filterTo   : "";
+
+  const unitWord = periodMode === "quarter" ? "quarter" : periodMode === "year" ? "year" : "month";
+  const cardLabels: CardLabels = period
+    ? { current: period.label.split(" (")[0], previous: period.prevLabel, compare: period.prevLabel, scope: "this " + unitWord }
+    : periodMode === "custom" && rangeFrom && rangeTo
+      ? { current: "Selected Range", previous: "Previous Range", compare: "previous range", scope: "in range" }
+      : { current: "This Month", previous: "Last Month", compare: "last month", scope: "this month" };
+
   useEffect(() => { loadCategories(); }, [session]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadExpenses(); }, [session, search, filterCat, filterFrom, filterTo, page]);
+  useEffect(() => { loadExpenses(); }, [session, search, filterCat, rangeFrom, rangeTo, page]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadSummary(); }, [session, filterFrom, filterTo]);
+  useEffect(() => { loadSummary(); }, [session, rangeFrom, rangeTo]);
 
   async function loadCategories() {
     if (!session?.access_token) return;
@@ -456,8 +556,8 @@ function ERPExpensesPage() {
       const params: Record<string, string> = { page: String(page), limit: String(LIMIT) };
       if (search)     params.search      = search;
       if (filterCat)  params.category_id = filterCat;
-      if (filterFrom) params.from        = filterFrom;
-      if (filterTo)   params.to          = filterTo;
+      if (rangeFrom)  params.from        = rangeFrom;
+      if (rangeTo)    params.to          = rangeTo;
       const res = await fetchERPExpenses(session.access_token, params);
       if (res.success) { setExpenses(res.expenses); setTotal(res.count); }
     } catch (err: any) {
@@ -473,8 +573,8 @@ function ERPExpensesPage() {
     try {
       const res = await fetchERPExpenseSummary(
         session.access_token,
-        filterFrom || undefined,
-        filterTo || undefined,
+        rangeFrom && rangeTo ? rangeFrom : undefined,
+        rangeFrom && rangeTo ? rangeTo : undefined,
       );
       if (res.success) setSummary(res.summary);
     } catch { /* silent */ } finally {
@@ -509,11 +609,18 @@ function ERPExpensesPage() {
   }
 
   function clearFilters() {
-    setSearch(""); setFilterCat(""); setFilterFrom(""); setFilterTo(""); setPage(1);
+    setSearch(""); setFilterCat(""); setFilterFrom(""); setFilterTo("");
+    setPeriodMode("all"); setPeriodOffset(0); setPage(1);
   }
 
+  function changePeriodMode(mode: PeriodMode) {
+    setPeriodMode(mode); setPeriodOffset(0); setPage(1);
+  }
+
+  const spentByNames = [...new Set(expenses.map((e) => e.spent_by?.trim()).filter((n): n is string => !!n))].sort();
+
   const totalPages = Math.ceil(total / LIMIT);
-  const hasFilters = !!(search || filterCat || filterFrom || filterTo);
+  const hasFilters = !!(search || filterCat || periodMode !== "all");
 
   return (
     <div className="space-y-6">
@@ -535,8 +642,62 @@ function ERPExpensesPage() {
         </div>
       </div>
 
+      {/* Period selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
+          {PERIOD_MODES.map((m) => (
+            <button
+              key={m.value}
+              onClick={() => changePeriodMode(m.value)}
+              className={"rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer transition-all " + (
+                periodMode === m.value
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {period && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline" size="sm" className="h-7 w-7 p-0"
+              onClick={() => { setPeriodOffset((o) => o - 1); setPage(1); }}
+              title={"Previous " + unitWord}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="min-w-[150px] text-center text-xs font-semibold text-foreground">{period.label}</span>
+            <Button
+              variant="outline" size="sm" className="h-7 w-7 p-0"
+              disabled={periodOffset >= 0}
+              onClick={() => { setPeriodOffset((o) => o + 1); setPage(1); }}
+              title={"Next " + unitWord}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+        {periodMode === "custom" && (
+          <div className="flex items-center gap-2">
+            <Input
+              id="expense-filter-from" type="date" value={filterFrom}
+              onChange={(e) => { setFilterFrom(e.target.value); setPage(1); }}
+              className="h-8 w-36 text-sm"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input
+              id="expense-filter-to" type="date" value={filterTo}
+              onChange={(e) => { setFilterTo(e.target.value); setPage(1); }}
+              className="h-8 w-36 text-sm"
+            />
+          </div>
+        )}
+      </div>
+
       {/* Summary cards */}
-      <SummaryCards summary={summary} loading={summaryLoading} />
+      <SummaryCards summary={summary} loading={summaryLoading} labels={cardLabels} />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
@@ -544,7 +705,7 @@ function ERPExpensesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             id="expense-search"
-            placeholder="Search vendor or description…"
+            placeholder="Search vendor, description or spent by…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-9 h-8 text-sm"
@@ -579,16 +740,6 @@ function ERPExpensesPage() {
             </select>
           );
         })()}
-        <Input
-          id="expense-filter-from" type="date" value={filterFrom}
-          onChange={(e) => { setFilterFrom(e.target.value); setPage(1); }}
-          className="h-8 w-36 text-sm"
-        />
-        <Input
-          id="expense-filter-to" type="date" value={filterTo}
-          onChange={(e) => { setFilterTo(e.target.value); setPage(1); }}
-          className="h-8 w-36 text-sm"
-        />
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             <X className="h-3.5 w-3.5 mr-1" /> Clear
@@ -602,7 +753,7 @@ function ERPExpensesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40 border-b border-border/60">
               <tr>
-                {["Date", "Expense #", "Category", "Vendor", "Description", "Method", "Amount", "Status", "Receipt", "Actions"].map((h) => (
+                {["Date", "Expense #", "Category", "Vendor", "Spent By", "Description", "Method", "Amount", "Status", "Receipt", "Actions"].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap">
                     {h}
                   </th>
@@ -613,14 +764,14 @@ function ERPExpensesPage() {
               {loading ? (
                 [...Array(6)].map((_, i) => (
                   <tr key={i} className="border-b border-border/40">
-                    {[...Array(10)].map((_, j) => (
+                    {[...Array(11)].map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))
               ) : expenses.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-muted-foreground text-sm">
+                  <td colSpan={11} className="text-center py-12 text-muted-foreground text-sm">
                     No expenses found.
                     {isAdmin && (
                       <> <button onClick={openCreate} className="text-primary underline">Add one now.</button></>
@@ -645,6 +796,7 @@ function ERPExpensesPage() {
                     })()}
                   </td>
                   <td className="px-4 py-3 max-w-[120px] truncate text-xs">{e.vendor || "—"}</td>
+                  <td className="px-4 py-3 max-w-[120px] truncate text-xs">{e.spent_by || "—"}</td>
                   <td className="px-4 py-3 max-w-[200px] truncate text-xs text-muted-foreground">
                     {e.description || "—"}
                   </td>
@@ -765,6 +917,7 @@ function ERPExpensesPage() {
         categories={categories}
         token={session?.access_token}
         editing={editing}
+        spentByNames={spentByNames}
       />
 
       {/* Receipt preview modal */}

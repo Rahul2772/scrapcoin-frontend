@@ -622,6 +622,7 @@ export type ERPExpense = {
   expense_date: string;
   description?: string | null;
   vendor?: string | null;
+  spent_by?: string | null;
   payment_method: string;
   receipt_url?: string | null;
   is_recurring: boolean;
