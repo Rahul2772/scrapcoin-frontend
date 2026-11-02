@@ -100,7 +100,7 @@ function ERPInvoicesPage() {
 
   useEffect(() => {
     loadInvoices();
-  }, [session, statusFilter, search]);
+  }, [session, statusFilter]);
 
   async function loadInvoices() {
     if (!session?.access_token) return;
@@ -108,13 +108,26 @@ function ERPInvoicesPage() {
     try {
       const params: Record<string, string> = {};
       if (statusFilter !== "all") params.status = statusFilter;
-      if (search) params.search = search; // simple search trigger
 
-      const res = await fetchERPInvoices(session.access_token, params);
-      if (res.success) {
-        setInvoices(groupInvoices(res.invoices));
-        setSummary(res.summary);
+      // The API paginates line items (one row per material, e.g. INV-00045/1, /2),
+      // so fetch every page before grouping or older invoices get cut off.
+      const PAGE_SIZE = 200;
+      const rows: ERPInvoice[] = [];
+      let summaryData: any = null;
+      for (let page = 1; ; page++) {
+        const res = await fetchERPInvoices(session.access_token, {
+          ...params,
+          page: String(page),
+          limit: String(PAGE_SIZE),
+        });
+        if (!res.success) break;
+        summaryData = res.summary;
+        rows.push(...res.invoices);
+        if (res.invoices.length < PAGE_SIZE) break;
       }
+
+      setInvoices(groupInvoices(rows));
+      setSummary(summaryData);
     } catch (err: any) {
       toast.error(err.message || "Failed to load invoices log");
     } finally {
