@@ -146,7 +146,7 @@ function ERPTransactionsPage() {
 
   useEffect(() => {
     loadTransactions();
-  }, [session, search]);
+  }, [session]);
 
   useEffect(() => {
     if (dialogOpen && session?.access_token) {
@@ -164,12 +164,20 @@ function ERPTransactionsPage() {
     if (!session?.access_token) return;
     setLoading(true);
     try {
-      const params: Record<string, string> = {};
-      if (search) params.supplier_name = search;
-      const res = await fetchERPTransactions(session.access_token, params);
-      if (res.success) {
-        setTransactions(groupTransactions(res.transactions));
+      // The API paginates line items (one row per material, e.g. TXN-00045/1, /2),
+      // so fetch every page before grouping or older tickets get cut off.
+      const PAGE_SIZE = 200;
+      const rows: ERPTransaction[] = [];
+      for (let page = 1; ; page++) {
+        const res = await fetchERPTransactions(session.access_token, {
+          page: String(page),
+          limit: String(PAGE_SIZE),
+        });
+        if (!res.success) break;
+        rows.push(...res.transactions);
+        if (res.transactions.length < PAGE_SIZE) break;
       }
+      setTransactions(groupTransactions(rows));
     } catch (err: any) {
       toast.error(err.message || "Failed to load transactions log");
     } finally {
@@ -373,7 +381,13 @@ function ERPTransactionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {transactions.map((t) => (
+                {transactions
+                  .filter(
+                    (t) =>
+                      t.txn_number.toLowerCase().includes(search.toLowerCase()) ||
+                      t.supplier_name.toLowerCase().includes(search.toLowerCase())
+                  )
+                  .map((t) => (
                   <tr key={t.id} className="hover:bg-muted/10 transition-colors">
                     <td className="px-6 py-4 font-semibold text-foreground whitespace-nowrap">
                       <div className="flex flex-col">
