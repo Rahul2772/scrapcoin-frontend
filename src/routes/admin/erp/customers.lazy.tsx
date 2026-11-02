@@ -225,7 +225,7 @@ function ERPCustomersPage() {
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search B2C customers list..."
+            placeholder="Search name, phone or address..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 rounded-xl border border-border bg-card text-xs"
@@ -271,7 +271,7 @@ function ERPCustomersPage() {
                 <tr className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
                   <th className="px-6 py-4">Customer</th>
                   <th className="px-6 py-4">Phone / Contact</th>
-                  <th className="px-6 py-4">Verification ID</th>
+                  <th className="px-6 py-4">Address</th>
                   <th className="px-6 py-4">Last Receipt / Pickup</th>
                   <th className="px-6 py-4 text-right">Pickups visits</th>
                   <th className="px-6 py-4 text-right">Lifetime Paid</th>
@@ -311,9 +311,12 @@ function ERPCustomersPage() {
                         {!c.phone && !c.whatsapp && !c.upi && "—"}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
-                      {c.id_type ? (
-                        <span>{c.id_type}: <strong>{c.id_number}</strong></span>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {c.address ? (
+                        <span className="flex items-start gap-1 max-w-[240px]" title={c.address}>
+                          <MapPin className="h-3 w-3 text-primary mt-0.5 shrink-0" />
+                          <span className="line-clamp-2">{c.address}</span>
+                        </span>
                       ) : (
                         "—"
                       )}
