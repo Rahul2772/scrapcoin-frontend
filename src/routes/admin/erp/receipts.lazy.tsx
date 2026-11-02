@@ -924,125 +924,190 @@ function ERPReceiptsPage() {
         </div>
       )}
 
-      {/* Receipts Table */}
-      {!loading && (
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
-                  <th className="px-6 py-4">Receipt No</th>
-                  <th className="px-6 py-4">Customer</th>
-                  <th className="px-6 py-4">Material Collected</th>
-                  <th className="px-6 py-4 text-right">Qty</th>
-                  <th className="px-6 py-4 text-right">Unit Rate</th>
-                  <th className="px-6 py-4 text-right">Cash Paid</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-muted/10 transition-colors">
-                    <td className="px-6 py-4 font-semibold text-foreground whitespace-nowrap">
-                      <div className="flex flex-col">
-                        <span>{r.receipt_number}</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">
+      {/* Receipts: cards on small screens, table on md+ */}
+      {!loading && (() => {
+        const materialNames = (r: GroupedERPPurchaseReceipt) =>
+          r.materials && r.materials.length > 0 ? r.materials.map((m) => m.material_name) : [r.material_name];
+
+        // Show the first few materials as chips; the rest collapse into "+N more" (full list on hover)
+        const MaterialChips = ({ r, max }: { r: GroupedERPPurchaseReceipt; max: number }) => {
+          const names = materialNames(r);
+          const shown = names.slice(0, max);
+          const hidden = names.length - shown.length;
+          return (
+            <div className="flex flex-wrap gap-1" title={names.join(", ")}>
+              {shown.map((n, i) => (
+                <span key={i} className="rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] text-foreground/80 max-w-[140px] truncate">
+                  {n}
+                </span>
+              ))}
+              {hidden > 0 && (
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  +{hidden} more
+                </span>
+              )}
+            </div>
+          );
+        };
+
+        const Actions = ({ r }: { r: GroupedERPPurchaseReceipt }) => (
+          <div className="flex items-center justify-end gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openViewReceipt(r)}
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+              title="View Receipt (Popup)"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => generateReceiptPDF(r)}
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Print Receipt"
+            >
+              <Printer className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                toast.promise(generateReceiptImageFile(r), {
+                  loading: "Generating image…",
+                  success: "Receipt image downloaded!",
+                  error: (e) => `Image failed: ${e?.message ?? e}`,
+                });
+              }}
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-emerald-600 cursor-pointer"
+              title="Download as Image (WhatsApp)"
+            >
+              <ImageDown className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openEdit(r)}
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Edit Scale Receipt"
+            >
+              <Edit2 className="h-4 w-4" />
+            </Button>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDelete(r.id)}
+                className="h-7 w-7 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                title="Delete Scale Receipt"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        );
+
+        const rate = (r: GroupedERPPurchaseReceipt) =>
+          r.materials && r.materials.length > 1 ? "Various" : `₹${r.price_per_unit.toFixed(2)}`;
+
+        if (filtered.length === 0) {
+          return (
+            <div className="rounded-2xl border border-border/60 bg-card px-6 py-10 text-center text-xs text-muted-foreground">
+              No household collection receipts logged. Click "Create Scale Ticket (B2C)" to start.
+            </div>
+          );
+        }
+
+        return (
+          <>
+            {/* Mobile / small screens */}
+            <div className="space-y-3 md:hidden">
+              {filtered.map((r) => (
+                <div key={r.id} className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-foreground">
+                        {r.receipt_number}
+                        <span className="ml-2 text-[10px] font-normal text-muted-foreground">
                           {new Date(r.created_at).toLocaleDateString("en-IN")}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-foreground truncate max-w-[150px]">{r.customer_name}</div>
-                      {r.customer_phone && (
-                        <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>
-                      )}
-                      {r.customer_address && (
-                        <div className="text-[10px] text-muted-foreground/80 truncate max-w-[150px]" title={r.customer_address}>
-                          {r.customer_address}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">
-                      {r.material_name}
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold text-foreground whitespace-nowrap">
-                      {r.weight.toLocaleString()} {r.unit}
-                    </td>
-                    <td className="px-6 py-4 text-right text-muted-foreground">
-                      {r.materials && r.materials.length > 1 ? "Various" : `₹${r.price_per_unit.toFixed(2)}`}
-                    </td>
-                    <td className="px-6 py-4 text-right font-bold text-foreground">₹{r.total_amount.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openViewReceipt(r)}
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-                          title="View Receipt (Popup)"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => generateReceiptPDF(r)}
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-                          title="Print Receipt"
-                        >
-                          <Printer className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            toast.promise(generateReceiptImageFile(r), {
-                              loading: "Generating image…",
-                              success: "Receipt image downloaded!",
-                              error: (e) => `Image failed: ${e?.message ?? e}`,
-                            });
-                          }}
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-emerald-600 cursor-pointer"
-                          title="Download as Image (WhatsApp)"
-                        >
-                          <ImageDown className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(r)}
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-                          title="Edit Scale Receipt"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        {isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(r.id)}
-                            className="h-7 w-7 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                            title="Delete Scale Receipt"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                      <div className="text-xs font-medium text-foreground truncate">{r.customer_name}</div>
+                      {r.customer_phone && <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold text-foreground">₹{r.total_amount.toLocaleString()}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {r.weight.toLocaleString()} {r.unit} · {rate(r)}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">
-                      No household collection receipts logged. Click "Create Scale Ticket (B2C)" to start.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                    </div>
+                  </div>
+                  <MaterialChips r={r} max={4} />
+                  <div className="border-t border-border/40 pt-2">
+                    <Actions r={r} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet / desktop */}
+            <div className="hidden md:block overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
+                      <th className="px-4 py-4">Receipt No</th>
+                      <th className="px-4 py-4">Customer</th>
+                      <th className="px-4 py-4">Material Collected</th>
+                      <th className="px-4 py-4 text-right">Qty</th>
+                      <th className="px-4 py-4 text-right">Unit Rate</th>
+                      <th className="px-4 py-4 text-right">Cash Paid</th>
+                      <th className="px-4 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filtered.map((r) => (
+                      <tr key={r.id} className="hover:bg-muted/10 transition-colors">
+                        <td className="px-4 py-4 font-semibold text-foreground whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span>{r.receipt_number}</span>
+                            <span className="text-[10px] text-muted-foreground font-normal">
+                              {new Date(r.created_at).toLocaleDateString("en-IN")}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="font-medium text-foreground truncate max-w-[150px]">{r.customer_name}</div>
+                          {r.customer_phone && (
+                            <div className="text-[10px] text-muted-foreground">{r.customer_phone}</div>
+                          )}
+                          {r.customer_address && (
+                            <div className="text-[10px] text-muted-foreground/80 truncate max-w-[150px]" title={r.customer_address}>
+                              {r.customer_address}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 min-w-[180px] max-w-[300px]">
+                          <MaterialChips r={r} max={3} />
+                        </td>
+                        <td className="px-4 py-4 text-right font-semibold text-foreground whitespace-nowrap">
+                          {r.weight.toLocaleString()} {r.unit}
+                        </td>
+                        <td className="px-4 py-4 text-right text-muted-foreground whitespace-nowrap">{rate(r)}</td>
+                        <td className="px-4 py-4 text-right font-bold text-foreground whitespace-nowrap">₹{r.total_amount.toLocaleString()}</td>
+                        <td className="px-4 py-4 text-right whitespace-nowrap">
+                          <Actions r={r} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        );
+      })()}
         </>
       )}
 
