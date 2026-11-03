@@ -2,17 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { BookOpen, Sparkles, HelpCircle, Recycle } from "lucide-react";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/blog")({
-  head: () => ({
-    meta: [
-      { title: "Blog & Resources — The Scrap Co." },
-      {
-        name: "description",
-        content: "Learn tips on recycling, sorting household scrap, metal rate trends, and environmental compliance at The Scrap Co. blog.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/blog",
+      title: "Blog & Resources — The Scrap Co.",
+      description:
+        "Learn tips on recycling, sorting household scrap, metal rate trends, and environmental compliance at The Scrap Co. blog.",
+    }),
   component: BlogPage,
 });
 

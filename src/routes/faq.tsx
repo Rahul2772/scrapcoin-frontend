@@ -3,17 +3,16 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/faq")({
-  head: () => ({
-    meta: [
-      { title: "FAQ — The Scrap Co." },
-      {
-        name: "description",
-        content: "Frequently Asked Questions about doorstep scrap pickup, digital weighing, payment modes, and operational areas.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/faq",
+      title: "FAQ — The Scrap Co.",
+      description:
+        "Frequently Asked Questions about doorstep scrap pickup, digital weighing, payment modes, and operational areas.",
+    }),
   component: FAQPage,
 });
 
@@ -37,7 +36,7 @@ const FAQ_DATA: FAQSection[] = [
       },
       {
         q: "Which areas do you currently serve?",
-        a: "We currently serve Greater Noida, Indirapuram, and Noida. We are expanding rapidly to other NCR zones soon.",
+        a: "We currently serve Noida, Greater Noida (including Greater Noida West) and Indirapuram. We are expanding rapidly to other NCR zones soon.",
       },
       {
         q: "Is there a minimum weight quantity?",

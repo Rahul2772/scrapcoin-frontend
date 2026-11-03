@@ -2,17 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Mail, CheckCircle2, TrendingUp, Users } from "lucide-react";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/careers")({
-  head: () => ({
-    meta: [
-      { title: "Careers — The Scrap Co." },
-      {
-        name: "description",
-        content: "Join the team at The Scrap Co. Explore job applications and help us build waste-to-worth infrastructure.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/careers",
+      title: "Careers — The Scrap Co.",
+      description:
+        "Join the team at The Scrap Co. Explore job applications and help us build waste-to-worth infrastructure.",
+    }),
   component: CareersPage,
 });
 

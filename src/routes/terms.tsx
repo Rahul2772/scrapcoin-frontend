@@ -1,17 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/terms")({
-  head: () => ({
-    meta: [
-      { title: "Terms of Service — The Scrap Co." },
-      {
-        name: "description",
-        content: "Terms of Service for using The Scrap Co. platform. Read about scheduling, digital weighing, payouts, and cancellations.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/terms",
+      title: "Terms of Service — The Scrap Co.",
+      description:
+        "Terms of Service for using The Scrap Co. platform. Read about scheduling, digital weighing, payouts, and cancellations.",
+    }),
   component: TermsPage,
 });
 

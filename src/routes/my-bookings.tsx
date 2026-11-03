@@ -23,14 +23,17 @@ import { useAuth } from "@/context/AuthContext";
 import { NavAuth } from "./__root";
 import { cn } from "@/lib/utils";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/my-bookings")({
-  head: () => ({
-    meta: [
-      { title: "My Bookings — The Scrap Co." },
-      { name: "description", content: "Track your ScrapCo pickup status in real time — from booking to payment." },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/my-bookings",
+      title: "My Bookings — The Scrap Co.",
+      description:
+        "Track your ScrapCo pickup status in real time — from booking to payment.",
+      noindex: true,
+    }),
   component: MyBookingsPage,
 });
 

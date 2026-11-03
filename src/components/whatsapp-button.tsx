@@ -19,7 +19,9 @@ export function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-export function WhatsAppFAB() {
+/** `hideOnMobile`: the homepage sets it while the booking form is on screen,
+ *  where the button would cover the form's controls on a phone. */
+export function WhatsAppFAB({ hideOnMobile = false }: { hideOnMobile?: boolean }) {
   const [showLabel, setShowLabel] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -36,7 +38,12 @@ export function WhatsAppFAB() {
   if (!mounted) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3">
+    // bottom-24 on phones keeps it clear of the homepage's sticky "Book Free Pickup" bar
+    <div
+      className={`fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 items-center gap-3 ${
+        hideOnMobile ? "hidden md:flex" : "flex"
+      }`}
+    >
       {/* Label bubble */}
       <span
         className={`hidden sm:inline-block rounded-full bg-white px-4 py-2 text-sm font-medium text-emerald-700 shadow-lg transition-all duration-500 ${

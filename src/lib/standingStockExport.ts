@@ -222,20 +222,11 @@ export function exportStandingStockToExcel({
 }
 
 /**
- * Dynamically load jsPDF library
+ * Load jsPDF (bundled and code-split: fetched only when a PDF is generated)
  */
 async function loadJsPDF(): Promise<any> {
-  const windowObj = window as any;
-  if (!windowObj.jspdf) {
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load PDF library"));
-      document.head.appendChild(script);
-    });
-  }
-  return windowObj.jspdf.jsPDF;
+  const { jsPDF } = await import("jspdf");
+  return jsPDF;
 }
 
 /**

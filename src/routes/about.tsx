@@ -2,17 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ShieldCheck, CalendarCheck, Scale, Award } from "lucide-react";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/about")({
-  head: () => ({
-    meta: [
-      { title: "About Us — The Scrap Co." },
-      {
-        name: "description",
-        content: "Learn how The Scrap Co. is digitizing doorstep scrap collection with calibrated digital scales and instant payouts.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/about",
+      title: "About Us — The Scrap Co.",
+      description:
+        "Learn how The Scrap Co. is digitizing doorstep scrap collection with calibrated digital scales and payment at pickup.",
+    }),
   component: AboutPage,
 });
 
@@ -48,7 +47,7 @@ function AboutPage() {
           <div className="rounded-2xl border border-border/60 bg-muted/20 p-6 space-y-4">
             <h2 className="text-xl font-bold tracking-tight text-foreground">Who We Are</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Based in Noida, The Scrap Co. is a tech-driven scrap collection service. We use calibrated digital scales, live market prices, and instant UPI payouts to make recycling **transparent, traceable, and trustworthy**.
+              Based in Noida, The Scrap Co. is a tech-driven scrap collection service. We use calibrated digital scales, live market prices, and payment by UPI at pickup to make recycling **transparent, traceable, and trustworthy**.
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Every kilogram collected is logged and tracked. We help you make sure your recyclables actually get recycled.
@@ -94,7 +93,7 @@ function AboutPage() {
                 </tr>
                 <tr>
                   <td className="px-6 py-3.5">Cash only, no invoice or transaction record</td>
-                  <td className="px-6 py-3.5 bg-primary/5 font-semibold text-foreground">Instant UPI payments + digital invoice receipt</td>
+                  <td className="px-6 py-3.5 bg-primary/5 font-semibold text-foreground">UPI payment at pickup + digital receipt</td>
                 </tr>
                 <tr>
                   <td className="px-6 py-3.5">No pickup scheduling (wait for local calls)</td>

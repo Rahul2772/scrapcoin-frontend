@@ -39,7 +39,9 @@ export function BrandLogo({
         aria-hidden
       >
         <img
-          src="/images/logo.jpg"
+          src="/images/logo-256.webp"
+          width={256}
+          height={256}
           alt="The Scrap Co."
           className="w-full h-full object-cover transition-transform duration-500 ease-out"
           style={{
@@ -51,11 +53,12 @@ export function BrandLogo({
       {showWordmark && (
         <div className="leading-tight">
           <span
-            className="block bg-clip-text text-transparent font-black tracking-wider uppercase transition-colors duration-300"
+            className="block whitespace-nowrap bg-clip-text text-transparent font-black tracking-wider uppercase transition-colors duration-300"
             style={{
               backgroundImage:
                 "linear-gradient(135deg, oklch(0.60 0.18 150), oklch(0.40 0.15 155))",
-              fontSize: size * 0.44,
+              // Shrinks on narrow phones so the wordmark stays on one line
+              fontSize: `min(${size * 0.44}px, 4.8vw)`,
               letterSpacing: "0.06em",
             }}
           >

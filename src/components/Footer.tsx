@@ -16,7 +16,7 @@ export function Footer() {
         <div>
           <BrandLogo size={40} showTagline />
           <p className="mt-4 text-xs text-muted-foreground leading-relaxed font-medium">
-            Waste to Worth — making scrap pickup transparent, tech-enabled, and instant across Noida & Greater Noida.
+            Waste to Worth — making scrap pickup transparent and tech-enabled across Noida, Greater Noida & Indirapuram.
           </p>
         </div>
         <div>

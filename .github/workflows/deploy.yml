@@ -33,6 +33,14 @@ jobs:
           VITE_API_URL: https://api.scrapco.in
           VITE_SUPABASE_URL: https://mtzvoeohbifxmertnwwy.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_hqVgHskOyz-dcyMVG0kURg_Yin7El1X
+          # Sentry: set the DSN as a repository variable and the auth token as a
+          # secret (Settings → Secrets and variables → Actions). Both optional;
+          # without them error tracking and source-map upload are skipped.
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      - name: Remove source maps from the public bundle
+        run: find dist/client -name '*.map' -print -delete
 
       - name: Deploy via Wrangler
         run: npx wrangler deploy --config dist/server/wrangler.json

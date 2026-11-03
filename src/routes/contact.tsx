@@ -3,17 +3,16 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Phone, Mail, MapPin, MessageSquare, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/contact")({
-  head: () => ({
-    meta: [
-      { title: "Contact Us — The Scrap Co." },
-      {
-        name: "description",
-        content: "Get in touch with The Scrap Co. Contact us via WhatsApp, email, or find our Noida service areas.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/contact",
+      title: "Contact Us — The Scrap Co.",
+      description:
+        "Get in touch with The Scrap Co. Contact us via WhatsApp, email, or find our Noida service areas.",
+    }),
   component: ContactPage,
 });
 
@@ -64,7 +63,7 @@ function ContactPage() {
             </div>
             <h3 className="font-bold text-base text-foreground">Our Location</h3>
             <p className="text-sm text-muted-foreground">Noida / Greater Noida West, Uttar Pradesh, India</p>
-            <p className="text-xs text-muted-foreground">Serving Noida, Greater Noida, and Indirapuram</p>
+            <p className="text-xs text-muted-foreground">Serving Noida, Greater Noida &amp; Indirapuram</p>
           </div>
         </div>
 

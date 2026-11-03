@@ -45,48 +45,54 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { BrandLogo } from "@/components/brand-logo";
 import { WhatsAppFAB, WhatsAppLink } from "@/components/whatsapp-button";
-import { createBooking, fetchCircularImpact, type CircularImpact } from "@/lib/api";
+import { createBooking } from "@/lib/api";
+import { loadImpact } from "@/lib/impact";
 import { NavAuth } from "./__root";
 import { Header } from "@/components/Header";
 import { isPincodeSupported, getPincodeLocation } from "@/lib/pincodes";
 import * as Sentry from "@sentry/react";
+import { pageHead } from "@/lib/seo";
+import { ESTIMATOR_ITEMS, formatRatesAsOf } from "@/lib/rates";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "The Scrap Co. — Smart Scrap Pickup in Greater Noida West" },
-      {
-        name: "description",
-        content:
-          "Tech-enabled doorstep scrap collection for apartments in Greater Noida West. Transparent weighing, instant UPI payment, full traceability.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/",
+      title: "The Scrap Co. — Doorstep Scrap Pickup in Noida, Greater Noida & Indirapuram",
+      description:
+        "Doorstep scrap pickup for apartments in Noida, Greater Noida (including Greater Noida West) and Indirapuram. Transparent digital weighing, paid at pickup by UPI or cash.",
+    }),
+  loader: loadImpact,
   component: Index,
 });
 
 const MATERIALS = ["Paper / Cardboard", "Plastics", "Metals", "E-Waste", "Others"] as const;
 
+type FormField = "pincode" | "date" | "fullName" | "phone" | "society" | "materials";
+type FormErrors = Partial<Record<FormField, string>>;
+// Same order as the form, so focus lands on the first problem the user sees
+const FIELD_ORDER: FormField[] = ["pincode", "date", "fullName", "phone", "society", "materials"];
+const FIELD_FOCUS_ID: Record<FormField, string> = {
+  pincode: "pincode",
+  date: "pickup-date",
+  fullName: "fullName",
+  phone: "phone",
+  society: "society",
+  materials: "material-0",
+};
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} className="text-xs font-medium text-red-600">
+      {message}
+    </p>
+  );
+}
+
 // Per-kg rate card for the scrap value estimator (match with backend categories)
-const ESTIMATOR_ITEMS = [
-  { id: "paper",   label: "Paper & Cardboard", emoji: "📰", rateMin: 8,  rateMax: 14,  unit: "kg", bookingMaterial: "Paper / Cardboard" },
-  { id: "plastic", label: "Plastics",           emoji: "🧴", rateMin: 6,  rateMax: 12,  unit: "kg", bookingMaterial: "Plastics" },
-  { id: "metal",   label: "Metals",             emoji: "🔩", rateMin: 30, rateMax: 55,  unit: "kg", bookingMaterial: "Metals" },
-  { id: "ewaste",  label: "E-Waste",            emoji: "💻", rateMin: 50, rateMax: 150, unit: "kg", bookingMaterial: "E-Waste" },
-] as const;
 
 type EstimatorId = typeof ESTIMATOR_ITEMS[number]["id"];
-
-const FALLBACK_IMPACT: CircularImpact = {
-  grandTotalKg: 2135.5,
-  breakdown: [
-    { categoryId: "paper", label: "Paper & Cardboard", weightKg: 1140.0 },
-    { categoryId: "plastics", label: "Plastics", weightKg: 380.0 },
-    { categoryId: "metals", label: "Metals", weightKg: 486.0 },
-    { categoryId: "e-waste", label: "E-Waste", weightKg: 92.0 },
-    { categoryId: "others", label: "Others", weightKg: 45.0 }
-  ]
-};
 
 // Societies served in Greater Noida West
 const SOCIETIES = [
@@ -134,7 +140,20 @@ function Index() {
   const [materials, setMaterials] = useState<string[]>([]);
   const [pincodeInput, setPincodeInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [impact, setImpact] = useState<CircularImpact>(FALLBACK_IMPACT);
+  const [errors, setErrors] = useState<FormErrors>({});
+  // While the booking form is on screen, hide the sticky "Book Free Pickup" bar
+  // and (on phones) the WhatsApp button, which would cover the form
+  const [bookingInView, setBookingInView] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById("booking");
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => setBookingInView(entry.isIntersecting));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const clearError = (field: FormField) =>
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  const impact = Route.useLoaderData();
   // Address capture state
   const [societyValue, setSocietyValue] = useState("");      // dropdown selection
   const [societyOpen, setSocietyOpen] = useState(false);     // combobox open state
@@ -167,14 +186,11 @@ function Index() {
   const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(bookingText)}`;
 
 
-  useEffect(() => {
-    fetchCircularImpact()
-      .then(setImpact)
-      .catch(() => setImpact(FALLBACK_IMPACT));
-  }, []);
-
   const toggleMaterial = (m: string) =>
     setMaterials((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+  useEffect(() => {
+    if (materials.length > 0) clearError("materials");
+  }, [materials]);
 
   // Build the resolved society string (dropdown value or free-text "other")
   const resolvedSociety = societyValue === "__other__" ? societyOther.trim() : societyValue;
@@ -215,26 +231,35 @@ function Index() {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
-    if (!data.get("fullName") || !data.get("phone") || !resolvedSociety || !date) {
-      toast.error("Please fill all required fields and pick a date.");
-      return;
-    }
-
     const cleanPin = pincodeInput.trim();
-    if (!cleanPin || cleanPin.length !== 6) {
-      toast.error("Please enter a valid 6-digit Pincode to check pickup availability.");
-      return;
-    }
+    const fullName = String(data.get("fullName") ?? "").trim();
+    const phone = String(data.get("phone") ?? "").trim();
 
-    if (!isPincodeSupported(cleanPin)) {
-      toast.error(`Pickup is currently not available for pincode ${cleanPin}. Serviceable areas are Noida, Greater Noida, Noida Extension & Indirapuram.`);
-      return;
+    // Mirrors the backend's bookingSchema so a typo never reaches the API
+    const nextErrors: FormErrors = {};
+    if (cleanPin.length !== 6) nextErrors.pincode = "Enter your 6-digit pincode.";
+    else if (!isPincodeSupported(cleanPin)) nextErrors.pincode = `We don't pick up in ${cleanPin} yet.`;
+    if (!date) nextErrors.date = "Pick a pickup date.";
+    if (fullName.length < 2) nextErrors.fullName = "Enter your name.";
+    if (phone.replace(/\D/g, "").length < 10 || !/^[+\d\s\-()]{10,20}$/.test(phone)) {
+      nextErrors.phone = "Enter a 10-digit mobile number.";
     }
+    if (resolvedSociety.length < 3) {
+      nextErrors.society = societyValue === "__other__" ? "Type your society or address." : "Choose your society.";
+    }
+    if (materials.length === 0) nextErrors.materials = "Select at least one material.";
 
-    if (materials.length === 0) {
-      toast.error("Please select at least one material type.");
+    setErrors(nextErrors);
+    const firstInvalid = FIELD_ORDER.find((f) => nextErrors[f]);
+    if (firstInvalid) {
+      const focusId =
+        firstInvalid === "society" && societyValue === "__other__" ? "society-other" : FIELD_FOCUS_ID[firstInvalid];
+      document.getElementById(focusId)?.focus();
+      const count = Object.keys(nextErrors).length;
+      toast.error(count === 1 ? nextErrors[firstInvalid] : `Please fix the ${count} highlighted fields.`);
       return;
     }
+    if (!date) return; // checked above; narrows the type
 
     setSubmitting(true);
     try {
@@ -278,6 +303,7 @@ function Index() {
       setGeoStatus("idle");
       setDate(undefined);
       setMaterials([]);
+      setErrors({});
     } catch (err) {
       if (typeof window !== "undefined") {
         Sentry.captureException(err);
@@ -339,7 +365,7 @@ function Index() {
               </span>
             </h1>
             <p className="mt-5 text-lg text-muted-foreground">
-              Smart scales, live weight readings, and instant UPI payment — right at your
+              Smart scales, live weight readings, and payment by UPI or cash at pickup — right at your
               doorstep. Built for environmentally-conscious citizens who want
               recycling done the right way.
             </p>
@@ -368,7 +394,7 @@ function Index() {
               </WhatsAppLink>
             </div>
             <div className="mt-8 flex flex-wrap gap-5 text-sm text-muted-foreground">
-              {["SWM 2026 compliant", "Live digital weighing", "Paid in seconds"].map((t) => (
+              {["Free doorstep pickup", "Live digital weighing", "Paid at pickup"].map((t) => (
                 <span key={t} className="inline-flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-primary" /> {t}
                 </span>
@@ -421,7 +447,7 @@ function Index() {
           </div>
           <div className="flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
             <span className="text-lg">💸</span>
-            <span>Instant UPI Payment</span>
+            <span>UPI or Cash at Pickup</span>
           </div>
           <div className="flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
             <span className="text-lg">♻️</span>
@@ -452,8 +478,8 @@ function Index() {
             },
             {
               icon: Smartphone,
-              title: "Get Paid Instantly",
-              desc: "Receive payment directly to your UPI account on the spot. No waiting, no follow-ups.",
+              title: "Get Paid at Pickup",
+              desc: "Our collector pays you by UPI or cash right after weighing. No waiting, no follow-ups.",
             },
           ].map((s, i) => (
             <div
@@ -593,7 +619,7 @@ function Index() {
         ) : (
           <form
             onSubmit={handleSubmit}
-            autoComplete="off"
+            noValidate
             className="rounded-3xl border border-border/60 bg-card p-6 sm:p-10"
             style={{ boxShadow: "var(--shadow-elegant)" }}
           >
@@ -643,7 +669,7 @@ function Index() {
                               [item.id]: Math.max(0, prev[item.id] - 1),
                             }))
                           }
-                          className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer disabled:opacity-30"
+                          className="h-11 w-11 sm:h-9 sm:w-9 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer disabled:opacity-30"
                           disabled={kg === 0}
                         >
                           −
@@ -660,7 +686,7 @@ function Index() {
                               [item.id]: prev[item.id] + 1,
                             }))
                           }
-                          className="h-8 w-8 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
+                          className="h-11 w-11 sm:h-9 sm:w-9 rounded-full border border-border bg-background text-lg font-bold flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
                         >
                           +
                         </button>
@@ -684,7 +710,7 @@ function Index() {
                       ₹{Math.round(estMin).toLocaleString("en-IN")} – ₹{Math.round(estMax).toLocaleString("en-IN")}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Based on today's rates · Actual payout confirmed after digital weighing
+                      Based on rates as of {formatRatesAsOf()} · Actual payout confirmed after digital weighing
                     </p>
                   </>
                 ) : (
@@ -728,117 +754,6 @@ function Index() {
 
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="fullName">Full name</Label>
-                  <Input id="fullName" name="fullName" placeholder="Sai Shankar" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">WhatsApp number</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    inputMode="tel"
-                    pattern="[0-9+ ]{10,15}"
-                    placeholder="+91 98765 12345"
-                    required
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="society">Apartment society / Complex</Label>
-                  <Popover open={societyOpen} onOpenChange={setSocietyOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={societyOpen}
-                        className={cn(
-                          "flex h-10 w-full justify-between rounded-xl font-normal px-3 border-input",
-                          !societyValue && "text-muted-foreground"
-                        )}
-                      >
-                        {societyValue
-                          ? societyValue === "__other__" ? "Other — type below" : societyValue
-                          : "Select your society..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[200px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search society..." />
-                        <CommandList>
-                          <CommandEmpty>No society found.</CommandEmpty>
-                          <CommandGroup className="max-h-64 overflow-auto">
-                            {SOCIETIES.map((s) => (
-                              <CommandItem
-                                key={s}
-                                value={s}
-                                onSelect={(currentValue) => {
-                                  // shadcn command lowercases the value for some reason, so find original
-                                  const original = SOCIETIES.find(soc => soc.toLowerCase() === currentValue) || s;
-                                  setSocietyValue(original);
-                                  setSocietyOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    societyValue === s ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                {s}
-                              </CommandItem>
-                            ))}
-                            <CommandItem
-                              value="__other__"
-                              onSelect={() => {
-                                setSocietyValue("__other__");
-                                setSocietyOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  societyValue === "__other__" ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              Other — type below
-                            </CommandItem>
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  {societyValue === "__other__" && (
-                    <Input
-                      id="society-other"
-                      value={societyOther}
-                      onChange={(e) => setSocietyOther(e.target.value)}
-                      placeholder="e.g. Sector 16C, Greater Noida West"
-                      required
-                      className="mt-2"
-                    />
-                  )}
-                </div>
-                {/* Tower/Block + Flat Number */}
-                <div className="space-y-2">
-                  <Label htmlFor="tower-block">Tower / Block</Label>
-                  <Input
-                    id="tower-block"
-                    value={towerBlock}
-                    onChange={(e) => setTowerBlock(e.target.value)}
-                    placeholder="e.g. Tower B"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="flat-number">Flat Number</Label>
-                  <Input
-                    id="flat-number"
-                    value={flatNumber}
-                    onChange={(e) => setFlatNumber(e.target.value)}
-                    placeholder="e.g. 1204"
-                  />
-                </div>
-                <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="pincode">Pincode *</Label>
                     <div className="flex items-center gap-2">
@@ -848,7 +763,7 @@ function Index() {
                         onClick={handleGeolocate}
                         disabled={geoStatus === "loading"}
                         className={cn(
-                          "inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border transition-all cursor-pointer",
+                          "inline-flex min-h-11 sm:min-h-0 items-center gap-1 text-xs font-semibold rounded-full px-3 py-1 border transition-all cursor-pointer",
                           geoStatus === "found"
                             ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                             : geoStatus === "denied" || geoStatus === "error"
@@ -883,13 +798,19 @@ function Index() {
                     name="pincode"
                     type="text"
                     inputMode="numeric"
+                    autoComplete="postal-code"
                     maxLength={6}
-                    placeholder="e.g. 201306"
+                    placeholder="6-digit pincode"
                     value={pincodeInput || ""}
-                    onChange={(e) => setPincodeInput((e.target?.value || "").replace(/\D/g, "").slice(0, 6))}
+                    onChange={(e) => {
+                      setPincodeInput((e.target?.value || "").replace(/\D/g, "").slice(0, 6));
+                      clearError("pincode");
+                    }}
                     required
+                    aria-invalid={!!errors.pincode}
+                    aria-describedby={errors.pincode ? "pincode-error" : undefined}
                     className={cn(
-                      "rounded-xl transition-all",
+                      "h-11 rounded-xl transition-all aria-invalid:border-red-500",
                       (pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && "border-red-500 focus-visible:ring-red-500 bg-red-50/20",
                       (pincodeInput || "").length === 6 && isPincodeSupported(pincodeInput) && "border-emerald-500 focus-visible:ring-emerald-500 bg-emerald-50/20"
                     )}
@@ -900,20 +821,28 @@ function Index() {
                     </p>
                   )}
                   {(pincodeInput || "").length === 6 && !isPincodeSupported(pincodeInput) && (
-                    <p className="text-xs text-red-500 font-medium">
-                      Pickup is currently only available in Noida, Greater Noida, Noida Extension & Indirapuram.
+                    <p id="pincode-error" className="text-xs text-red-600 font-medium">
+                      Pickup is currently only available in Noida, Greater Noida &amp; Indirapuram.{" "}
+                      <WhatsAppLink className="underline underline-offset-2">WhatsApp us</WhatsAppLink> and
+                      we&apos;ll tell you when we reach your area.
                     </p>
+                  )}
+                  {(pincodeInput || "").length !== 6 && (
+                    <FieldError id="pincode-error" message={errors.pincode} />
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Preferred pickup date</Label>
+                  <Label htmlFor="pickup-date">Preferred pickup date</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
+                        id="pickup-date"
                         type="button"
                         variant="outline"
+                        aria-invalid={!!errors.date}
+                        aria-describedby={errors.date ? "date-error" : undefined}
                         className={cn(
-                          "w-full justify-start text-left font-normal",
+                          "h-11 w-full justify-start text-left font-normal aria-invalid:border-red-500",
                           !date && "text-muted-foreground",
                         )}
                       >
@@ -925,31 +854,190 @@ function Index() {
                       <Calendar
                         mode="single"
                         selected={date}
-                        onSelect={setDate}
+                        onSelect={(d) => {
+                          setDate(d);
+                          clearError("date");
+                        }}
                         initialFocus
                         disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
                         className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
                   </Popover>
+                  <FieldError id="date-error" message={errors.date} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full name</Label>
+                  <Input
+                    id="fullName"
+                    name="fullName"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    required
+                    onChange={() => clearError("fullName")}
+                    aria-invalid={!!errors.fullName}
+                    aria-describedby={errors.fullName ? "fullName-error" : undefined}
+                    className="h-11 aria-invalid:border-red-500"
+                  />
+                  <FieldError id="fullName-error" message={errors.fullName} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">WhatsApp number</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    pattern="[0-9+ ]{10,15}"
+                    placeholder="10-digit mobile number"
+                    required
+                    onChange={() => clearError("phone")}
+                    aria-invalid={!!errors.phone}
+                    aria-describedby={errors.phone ? "phone-error" : undefined}
+                    className="h-11 aria-invalid:border-red-500"
+                  />
+                  <FieldError id="phone-error" message={errors.phone} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="society">Apartment society / Complex</Label>
+                  <Popover open={societyOpen} onOpenChange={setSocietyOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="society"
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={societyOpen}
+                        aria-invalid={!!errors.society && societyValue !== "__other__"}
+                        aria-describedby={errors.society ? "society-error" : undefined}
+                        className={cn(
+                          "flex h-11 w-full justify-between rounded-xl font-normal px-3 border-input aria-invalid:border-red-500",
+                          !societyValue && "text-muted-foreground"
+                        )}
+                      >
+                        {societyValue
+                          ? societyValue === "__other__" ? "Other — type below" : societyValue
+                          : "Select your society..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[200px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search society..." aria-label="Search society" />
+                        <CommandList>
+                          <CommandEmpty>No society found.</CommandEmpty>
+                          <CommandGroup className="max-h-64 overflow-auto">
+                            {SOCIETIES.map((s) => (
+                              <CommandItem
+                                key={s}
+                                value={s}
+                                onSelect={(currentValue) => {
+                                  // shadcn command lowercases the value for some reason, so find original
+                                  const original = SOCIETIES.find(soc => soc.toLowerCase() === currentValue) || s;
+                                  setSocietyValue(original);
+                                  setSocietyOpen(false);
+                                  clearError("society");
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    societyValue === s ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {s}
+                              </CommandItem>
+                            ))}
+                            <CommandItem
+                              value="__other__"
+                              onSelect={() => {
+                                setSocietyValue("__other__");
+                                setSocietyOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  societyValue === "__other__" ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              Other — type below
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {societyValue === "__other__" && (
+                    <Input
+                      id="society-other"
+                      name="society"
+                      aria-label="Society or address"
+                      autoComplete="address-line1"
+                      value={societyOther}
+                      onChange={(e) => {
+                        setSocietyOther(e.target.value);
+                        clearError("society");
+                      }}
+                      placeholder="e.g. Sector 16C, Greater Noida West"
+                      required
+                      aria-invalid={!!errors.society}
+                      aria-describedby={errors.society ? "society-error" : undefined}
+                      className="mt-2 h-11 aria-invalid:border-red-500"
+                    />
+                  )}
+                  <FieldError id="society-error" message={errors.society} />
+                </div>
+                {/* Tower/Block + Flat Number */}
+                <div className="space-y-2">
+                  <Label htmlFor="tower-block">Tower / Block</Label>
+                  <Input
+                    id="tower-block"
+                    name="tower"
+                    className="h-11"
+                    value={towerBlock}
+                    onChange={(e) => setTowerBlock(e.target.value)}
+                    placeholder="e.g. Tower B"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="flat-number">Flat Number</Label>
+                  <Input
+                    id="flat-number"
+                    name="flat"
+                    className="h-11"
+                    value={flatNumber}
+                    onChange={(e) => setFlatNumber(e.target.value)}
+                    placeholder="e.g. 1204"
+                  />
                 </div>
                 {/* Hidden material checkboxes — auto-filled from estimator */}
                 <div className="space-y-3 sm:col-span-2">
-                  <Label>Material types (auto-selected from above)</Label>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {MATERIALS.map((m) => {
+                  <p id="materials-label" className="text-sm font-medium leading-none">
+                    Material types (auto-selected from above)
+                  </p>
+                  <div
+                    role="group"
+                    aria-labelledby="materials-label"
+                    aria-describedby={errors.materials ? "materials-error" : undefined}
+                    className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+                  >
+                    {MATERIALS.map((m, i) => {
                       const active = materials.includes(m);
                       return (
                         <label
                           key={m}
+                          htmlFor={`material-${i}`}
                           className={cn(
-                            "flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm transition-all",
+                            "flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm transition-all",
                             active
                               ? "border-primary bg-primary/5 text-foreground"
                               : "border-border bg-background text-muted-foreground hover:border-primary/40",
                           )}
                         >
                           <Checkbox
+                            id={`material-${i}`}
                             checked={active}
                             onCheckedChange={() => toggleMaterial(m)}
                           />
@@ -958,6 +1046,7 @@ function Index() {
                       );
                     })}
                   </div>
+                  <FieldError id="materials-error" message={errors.materials} />
                 </div>
               </div>
 
@@ -1087,10 +1176,15 @@ function Index() {
       <Footer />
 
       {/* Floating WhatsApp Button */}
-      <WhatsAppFAB />
+      <WhatsAppFAB hideOnMobile={bookingInView} />
 
       {/* Sticky Mobile CTA */}
-      <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/80 backdrop-blur-md border-t border-border/50 z-40 md:hidden">
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 p-3 bg-background/80 backdrop-blur-md border-t border-border/50 z-40 md:hidden",
+          bookingInView && "hidden",
+        )}
+      >
         <Button
           onClick={() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" })}
           className="w-full rounded-full h-12 shadow-lg shadow-primary/20 text-base font-bold cursor-pointer"

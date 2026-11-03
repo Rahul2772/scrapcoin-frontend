@@ -6,113 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NavAuth } from "./__root";
 import { Footer } from "@/components/Footer";
+import { pageHead } from "@/lib/seo";
+import { CATALOG, formatRatesAsOf } from "@/lib/rates";
 
 export const Route = createFileRoute("/rates")({
-  head: () => ({
-    meta: [
-      { title: "Today's Scrap Rates — All Materials | The Scrap Co., Noida" },
-      {
-        name: "description",
-        content:
-          "Check today's scrap rates per kg in Noida — Metals (Copper ₹935, Brass ₹575, Aluminium ₹220+), Papers, Plastics, Textiles, Wooden Scrap & Glass. Transparent pricing, instant bank transfer.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/rates",
+      title: "Scrap Rates per kg — All Materials | The Scrap Co., Noida",
+      description:
+        "Scrap rates per kg in Noida — Metals (Copper ₹935, Brass ₹575, Aluminium ₹220+), Papers, Plastics, Textiles, Wooden Scrap & Glass. Transparent pricing, paid at pickup by UPI or cash.",
+    }),
   component: RatesPage,
 });
-
-// ── Static catalog ──────────────────────────────────────────────────────────
-// Source: scrap_goods_inventory_and_price_catalog.md (purchase price = rate we pay customer)
-// Sorted within each category by purchase price descending
-
-type ScrapItem = { name: string; buyPrice: number; unit: string };
-
-type ScrapCategory = {
-  id: string;
-  label: string;
-  emoji: string;
-  accentFrom: string;
-  accentTo: string;
-  items: ScrapItem[];
-};
-
-const CATALOG: ScrapCategory[] = [
-  {
-    id: "metals",
-    label: "Metals",
-    emoji: "🔩",
-    accentFrom: "#64748b",
-    accentTo: "#94a3b8",
-    items: [
-      { name: "Copper", buyPrice: 935, unit: "kg" },
-      { name: "Brass", buyPrice: 575, unit: "kg" },
-      { name: "Aluminium Utensils", buyPrice: 225, unit: "kg" },
-      { name: "Aluminium Scraps", buyPrice: 220, unit: "kg" },
-      { name: "Steel", buyPrice: 40, unit: "kg" },
-      { name: "Heavy Iron", buyPrice: 27, unit: "kg" },
-      { name: "Metal E-Waste", buyPrice: 25, unit: "kg" },
-      { name: "Tin / Light Iron", buyPrice: 24, unit: "kg" },
-    ],
-  },
-  {
-    id: "papers",
-    label: "Papers",
-    emoji: "📰",
-    accentFrom: "#d97706",
-    accentTo: "#fbbf24",
-    items: [
-      { name: "Newspapers", buyPrice: 14, unit: "kg" },
-      { name: "Office Paper", buyPrice: 14, unit: "kg" },
-      { name: "Books / Notebooks / Paper", buyPrice: 13, unit: "kg" },
-      { name: "Magazines", buyPrice: 12, unit: "kg" },
-      { name: "Cardboard (OCC / Duplex)", buyPrice: 11, unit: "kg" },
-      { name: "Mill Board", buyPrice: 5, unit: "kg" },
-      { name: "Grey Board", buyPrice: 3, unit: "kg" },
-    ],
-  },
-  {
-    id: "plastics",
-    label: "Plastics",
-    emoji: "♻️",
-    accentFrom: "#059669",
-    accentTo: "#34d399",
-    items: [
-      { name: "Exhaust Fan Plastic", buyPrice: 50, unit: "kg" },
-      { name: "Water Tank (Black / White)", buyPrice: 20, unit: "kg" },
-      { name: "UPVC Door", buyPrice: 20, unit: "kg" },
-      { name: "Plastic E-Waste", buyPrice: 20, unit: "kg" },
-      { name: "Mixed Plastics", buyPrice: 10, unit: "kg" },
-      { name: "Paint Buckets (PVC)", buyPrice: 0, unit: "kg" },
-    ],
-  },
-  {
-    id: "textiles",
-    label: "Textiles",
-    emoji: "👕",
-    accentFrom: "#7c3aed",
-    accentTo: "#c084fc",
-    items: [
-      { name: "Used Clothes", buyPrice: 3, unit: "kg" },
-      { name: "Used Footwear", buyPrice: 0, unit: "kg" },
-    ],
-  },
-  {
-    id: "wooden",
-    label: "Wooden Scrap",
-    emoji: "🪵",
-    accentFrom: "#b45309",
-    accentTo: "#f59e0b",
-    items: [{ name: "Wooden Scraps", buyPrice: 0, unit: "kg" }],
-  },
-  {
-    id: "glass",
-    label: "Glass",
-    emoji: "🍶",
-    accentFrom: "#0891b2",
-    accentTo: "#67e8f9",
-    items: [{ name: "Glass Bottles / Sheets / Shards", buyPrice: 0, unit: "kg" }],
-  },
-];
 
 const TOTAL_ITEMS = CATALOG.reduce((s, c) => s + c.items.length, 0);
 
@@ -156,13 +62,13 @@ function RatesPage() {
         <div className="pointer-events-none absolute -top-32 -right-24 h-96 w-96 rounded-full opacity-20 blur-3xl" style={{ background: "var(--gradient-hero)" }} />
         <div className="relative mx-auto max-w-3xl px-4 text-center space-y-5">
           <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            Updated Daily · Noida Area
+            Rates as of {formatRatesAsOf()} · Noida Area
           </span>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             Scrap Rates &amp; Price List
           </h1>
           <p className="text-muted-foreground text-sm sm:text-base max-w-xl mx-auto">
-            Certified digital scales · instant bank transfer · {TOTAL_ITEMS} materials across 6 categories.
+            Certified digital scales · paid at pickup by UPI or cash · {TOTAL_ITEMS} materials across 6 categories.
           </p>
           {/* Stats chips */}
           <div className="flex flex-wrap justify-center gap-3 pt-1">

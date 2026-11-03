@@ -6,9 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandLogo } from "@/components/brand-logo";
 import { useAuth } from "@/context/AuthContext";
+import { pageHead } from "@/lib/seo";
 import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/login")({
+  head: () =>
+    pageHead({
+      path: "/login",
+      title: "Sign in — The Scrap Co.",
+      description: "Sign in to track your scrap pickups with The Scrap Co.",
+      noindex: true,
+    }),
   component: LoginPage,
 });
 

@@ -71,8 +71,8 @@ export type CircularImpact = {
   breakdown: CircularImpactItem[];
 };
 
-export async function fetchCircularImpact(): Promise<CircularImpact> {
-  return parseJson<CircularImpact>(await fetch(`${API_BASE}/api/live-pickup/impact`));
+export async function fetchCircularImpact(signal?: AbortSignal): Promise<CircularImpact> {
+  return parseJson<CircularImpact>(await fetch(`${API_BASE}/api/live-pickup/impact`, { signal }));
 }
 
 // ── ERP TYPINGS ──────────────────────────────────────────────────────────────

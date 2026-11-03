@@ -1,17 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/privacy")({
-  head: () => ({
-    meta: [
-      { title: "Privacy Policy — The Scrap Co." },
-      {
-        name: "description",
-        content: "Read the Privacy Policy of The Scrap Co. Learn how we handle your personal data under the DPDP Act 2023.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/privacy",
+      title: "Privacy Policy — The Scrap Co.",
+      description:
+        "Read the Privacy Policy of The Scrap Co. Learn how we collect, use and protect your personal data.",
+    }),
   component: PrivacyPage,
 });
 

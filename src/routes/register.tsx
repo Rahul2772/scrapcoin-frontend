@@ -6,8 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandLogo } from "@/components/brand-logo";
 import { useAuth } from "@/context/AuthContext";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/register")({
+  head: () =>
+    pageHead({
+      path: "/register",
+      title: "Create an account — The Scrap Co.",
+      description: "Create a The Scrap Co. account to track your scrap pickups.",
+      noindex: true,
+    }),
   component: RegisterPage,
 });
 

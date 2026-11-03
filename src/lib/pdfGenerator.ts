@@ -55,18 +55,8 @@ function loadImageBase64(url: string): Promise<string | null> {
 }
 
 export async function buildStandardPDFDoc(options: PDFDocumentOptions): Promise<any> {
-  const windowObj = window as any;
-  if (!windowObj.jspdf) {
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load PDF library"));
-      document.head.appendChild(script);
-    });
-  }
-
-  const { jsPDF } = windowObj.jspdf;
+  // Bundled and code-split: loaded only when a PDF is generated
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
   const logoBase64 = await loadImageBase64("/images/logo.jpg");

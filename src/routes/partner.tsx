@@ -2,17 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Building, Truck, Mail, CheckCircle2 } from "lucide-react";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/partner")({
-  head: () => ({
-    meta: [
-      { title: "Partner with Us — The Scrap Co." },
-      {
-        name: "description",
-        content: "Discover partnership options with The Scrap Co. for RWAs, apartment societies, and certified recycling companies.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/partner",
+      title: "Partner with Us — The Scrap Co.",
+      description:
+        "Discover partnership options with The Scrap Co. for RWAs, apartment societies, and certified recycling companies.",
+    }),
   component: PartnerPage,
 });
 
