@@ -11,6 +11,7 @@ import {
   type ERPCustomer,
 } from "@/lib/api";
 import { groupReceipts, type GroupedERPPurchaseReceipt } from "@/lib/utils";
+import { KNOWN_SOCIETIES, LEAD_SOURCES, detectSociety } from "@/lib/societies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,11 +69,16 @@ function ERPCustomersPage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [upi, setUpi] = useState("");
   const [address, setAddress] = useState("");
+  const [society, setSociety] = useState("");
+  // Until the society is typed by hand, it follows the address
+  const [societyTouched, setSocietyTouched] = useState(false);
+  const [leadSource, setLeadSource] = useState("");
   const [idType, setIdType] = useState("Aadhaar");
   const [idNumber, setIdNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [lastReceiptDate, setLastReceiptDate] = useState("");
   const [saving, setSaving] = useState(false);
+  const societyOptions = [...new Set([...KNOWN_SOCIETIES, ...customers.map((c) => c.society || "").filter(Boolean)])].sort();
 
   useEffect(() => {
     loadCustomers();
@@ -100,6 +106,9 @@ function ERPCustomersPage() {
     setWhatsapp("");
     setUpi("");
     setAddress("");
+    setSociety("");
+    setSocietyTouched(false);
+    setLeadSource("");
     setIdType("Aadhaar");
     setIdNumber("");
     setNotes("");
@@ -114,6 +123,9 @@ function ERPCustomersPage() {
     setWhatsapp(c.whatsapp || "");
     setUpi(c.upi || "");
     setAddress(c.address || "");
+    setSociety(c.society || "");
+    setSocietyTouched(!!c.society);
+    setLeadSource(c.lead_source || "");
     setIdType(c.id_type || "Aadhaar");
     setIdNumber(c.id_number || "");
     setNotes(c.notes || "");
@@ -162,6 +174,8 @@ function ERPCustomersPage() {
       whatsapp: whatsapp.trim() || null,
       upi: upi.trim() || null,
       address: address.trim() || null,
+      society: society.trim() || null,
+      lead_source: leadSource || null,
       id_type: idType || null,
       id_number: idNumber.trim() || null,
       notes: notes.trim() || null,
@@ -225,7 +239,7 @@ function ERPCustomersPage() {
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search name, phone or address..."
+            placeholder="Search name, phone, address or society..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 rounded-xl border border-border bg-card text-xs"
@@ -312,13 +326,18 @@ function ERPCustomersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
+                      {c.society && (
+                        <span className="mb-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                          {c.society}
+                        </span>
+                      )}
                       {c.address ? (
                         <span className="flex items-start gap-1 max-w-[240px]" title={c.address}>
                           <MapPin className="h-3 w-3 text-primary mt-0.5 shrink-0" />
                           <span className="line-clamp-2">{c.address}</span>
                         </span>
                       ) : (
-                        "—"
+                        !c.society && "—"
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -469,10 +488,45 @@ function ERPCustomersPage() {
                 <Input
                   id="cust-address"
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    if (!societyTouched) setSociety(detectSociety(e.target.value, societyOptions) || "");
+                  }}
                   placeholder="Gaur City Tower B FLAT 1402..."
                   className="rounded-xl border border-border"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="cust-society">Society / Apartment</Label>
+                <Input
+                  id="cust-society"
+                  list="cust-society-options"
+                  value={society}
+                  onChange={(e) => { setSociety(e.target.value); setSocietyTouched(true); }}
+                  placeholder="Picked from the address, or type"
+                  className="rounded-xl border border-border"
+                />
+                <datalist id="cust-society-options">
+                  {societyOptions.map((s) => <option key={s} value={s} />)}
+                </datalist>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cust-lead-source">How they found us</Label>
+                <select
+                  id="cust-lead-source"
+                  value={leadSource}
+                  onChange={(e) => setLeadSource(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Not known</option>
+                  {[...LEAD_SOURCES, ...(leadSource && !LEAD_SOURCES.includes(leadSource) ? [leadSource] : [])].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

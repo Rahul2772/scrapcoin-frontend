@@ -127,6 +127,8 @@ export type ERPCustomer = {
   is_30_day_alert?: boolean;
   is_active: boolean;
   notes?: string | null;
+  society?: string | null;
+  lead_source?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -308,6 +310,49 @@ export async function fetchERPDashboard(
   if (month)   params.set("month",   String(month));
   if (quarter) params.set("quarter", String(quarter));
   return authFetch(`${API_BASE}/api/erp/dashboard?${params.toString()}`, token);
+}
+
+// ── Reports (profitability) ──────────────────────────────────────────────────
+type ReportMoney = { kg: number; paid: number; est_value: number; profit: number; margin_pct: number | null };
+type ReportGroup = ReportMoney & { pickups: number; net_profit: number; profit_per_pickup: number; kg_per_pickup: number };
+
+export type ERPReport = {
+  period: { from: string | null; to: string | null };
+  summary: ReportMoney & {
+    pickups: number; customers: number; expenses: number; net_profit: number;
+    cost_per_pickup: number; profit_per_pickup: number; kg_per_pickup: number;
+    unpriced_materials: string[];
+  };
+  bills: (ReportMoney & {
+    bill_no: string; date: string; customer_id: string | null; customer_name: string;
+    society: string; lines: number; materials: string[];
+  })[];
+  customers: (ReportGroup & {
+    customer_id: string | null; name: string; phone: string | null; society: string; lead_source: string;
+    first_pickup: string | null; last_pickup: string | null; days_since_last: number | null; lifetime_pickups: number;
+  })[];
+  societies: (ReportGroup & { society: string; customers: number; top_materials: { name: string; kg: number }[] })[];
+  sources: (ReportGroup & { lead_source: string; customers: number })[];
+  materials: {
+    material_id: string | null; name: string; color_hex: string;
+    kg_bought: number; paid: number; avg_buy_rate: number | null;
+    kg_sold: number; sale_revenue: number; avg_sell_rate: number | null;
+    rate_source: "period" | "all_time" | "catalogue" | "none";
+    margin_per_kg: number | null; est_profit: number; share_kg_pct: number | null;
+  }[];
+  reengage: {
+    customer_id: string; name: string; phone: string | null; society: string;
+    last_pickup: string; days_since_last: number; lifetime_pickups: number; lifetime_profit: number;
+  }[];
+  reengage_after_days: number;
+};
+
+export async function fetchERPReports(token?: string, from?: string, to?: string): Promise<{ success: boolean; report: ERPReport }> {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to)   params.set("to", to);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  return authFetch(`${API_BASE}/api/erp/reports${qs}`, token);
 }
 
 export async function fetchERPMaterials(token?: string, category?: string): Promise<{ success: boolean; count: number; materials: ERPMaterial[] }> {

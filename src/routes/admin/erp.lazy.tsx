@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Bell,
   Banknote,
+  BarChart3,
 } from "lucide-react";
 
 export const Route = createLazyFileRoute("/admin/erp")({
@@ -21,6 +22,7 @@ export const Route = createLazyFileRoute("/admin/erp")({
 
 const ERP_TABS = [
   { to: "/admin/erp", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/admin/erp/reports", label: "Reports", icon: BarChart3, exact: false, adminOnly: true },
   { to: "/admin/erp/materials", label: "Materials", icon: Boxes, exact: false },
   { to: "/admin/erp/suppliers", label: "Recyclers", icon: Truck, exact: false },
   { to: "/admin/erp/transactions", label: "Sales (B2B)", icon: Scale, exact: false },
@@ -70,7 +72,7 @@ function ERPLayout() {
 
           {/* Navigation tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-            {ERP_TABS.map((tab) => {
+            {ERP_TABS.filter((tab) => !("adminOnly" in tab) || profile?.role === "admin").map((tab) => {
               const active = tab.exact ? pathname === tab.to : pathname.startsWith(tab.to);
               return (
                 <Link key={tab.to} to={tab.to}>
